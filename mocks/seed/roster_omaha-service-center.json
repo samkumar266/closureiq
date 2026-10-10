@@ -1,0 +1,210 @@
+{
+  "employees": [
+    {
+      "employee_id": "e_201",
+      "name": "Helen Brandt",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "Douglas NE",
+      "channels": [
+        {
+          "type": "email",
+          "address": "helen.brandt@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "402-555-0101"
+        },
+        {
+          "type": "push",
+          "address": "device-e_201"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": null
+    },
+    {
+      "employee_id": "e_202",
+      "name": "Jamal Peterson",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "Sarpy NE",
+      "channels": [
+        {
+          "type": "email",
+          "address": "jamal.peterson@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "402-555-0102"
+        },
+        {
+          "type": "push",
+          "address": "device-e_202"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_201"
+    },
+    {
+      "employee_id": "e_203",
+      "name": "Sofia Alvarez",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "Douglas NE",
+      "channels": [
+        {
+          "type": "email",
+          "address": "sofia.alvarez@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "402-555-0103"
+        },
+        {
+          "type": "push",
+          "address": "device-e_203"
+        }
+      ],
+      "comm_needs": [
+        "spanish"
+      ],
+      "supervisor_id": "e_201"
+    },
+    {
+      "employee_id": "e_204",
+      "name": "Ethan Clarke",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Douglas NE",
+      "channels": [
+        {
+          "type": "email",
+          "address": "ethan.clarke@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "402-555-0104"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_201"
+    },
+    {
+      "employee_id": "e_205",
+      "name": "Mina Park",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Pottawattamie IA",
+      "channels": [
+        {
+          "type": "email",
+          "address": "mina.park@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "402-555-0105"
+        },
+        {
+          "type": "push",
+          "address": "device-e_205"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_201"
+    },
+    {
+      "employee_id": "e_206",
+      "name": "Roy Lindqvist",
+      "group": "onsite_not_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Sarpy NE",
+      "channels": [
+        {
+          "type": "email",
+          "address": "roy.lindqvist@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "402-555-0106"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_201"
+    },
+    {
+      "employee_id": "e_207",
+      "name": "Zoe Hartmann",
+      "group": "already_teleworking",
+      "assignment_type": "remote",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "teleworking",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Douglas NE",
+      "channels": [
+        {
+          "type": "email",
+          "address": "zoe.hartmann@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "402-555-0107"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_201"
+    },
+    {
+      "employee_id": "e_208",
+      "name": "Victor Salazar",
+      "group": "on_leave_or_off",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "day_off",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Douglas NE",
+      "channels": [
+        {
+          "type": "email",
+          "address": "victor.salazar@closureiq.example"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_201"
+    }
+  ]
+}
