@@ -1,40 +1,73 @@
 import type { Posture } from './theme'
 
+// Shapes from docs/contract.md. A field that may be empty is null, never missing.
+
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 export type DataMode = 'live' | 'replay'
 export type AlertTier = 'none' | 'advisory' | 'watch' | 'warning'
 export type SourceHealth = 'ok' | 'degraded' | 'missing'
+export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'rejected' | 'overridden' | 'unresolved'
 
 export type RecommendationInput = {
   id: string
-  role: string
+  role: 'drove' | 'context'
   source: string
   label: string
-  value: unknown
+  value: number | Record<string, unknown>
   unit?: string
+  onset?: string
+  ends?: string
   fetched_at: string
   snapshot_id: string
   stale: boolean
 }
 
-export type Threshold = {
+// Tier and field thresholds (T1 to T3) have string cutoffs; numeric ones add unit, margin and anchor.
+export type ThresholdCrossed = {
   id: string
-  [key: string]: unknown
+  input_id: string
+  cutoff: string | number
+  actual: string | number
+  unit?: string
+  margin?: number
+  anchor?: string
+  anchor_url?: string | null
+}
+
+export type ThresholdNotCrossed = {
+  id: string
+  input_id: string
+  cutoff: string | number
+  actual: string | number
+  unit?: string
+  distance?: number
 }
 
 export type MissingEvidence = {
   source: string
   reason: string
-  [key: string]: unknown
+  last_good_snapshot_id: string | null
+  last_good_age_minutes: number | null
+  max_age_minutes: number
 }
 
 export type FlipListItem = {
   change: string
-  resulting_posture: string
+  resulting_posture: Posture
   note?: string
 }
 
+export type RecommendationParameters = {
+  monitoring?: 'normal' | 'elevated'
+  delay_until?: string
+  dismiss_at?: string
+  closed_from?: string
+  closed_until?: string
+  next_update?: string
+}
+
 export type Recommendation = {
+  hypothetical: boolean
   evaluation_id: string
   supersedes: string | null
   facility_id: string
@@ -42,7 +75,9 @@ export type Recommendation = {
   policy_version: string
   data_mode: DataMode
   posture: Posture
-  parameters: Record<string, unknown>
+  raw_posture: Posture
+  held_by_hysteresis: boolean
+  parameters: RecommendationParameters
   safety_instruction: string | null
   decision_deadline: string | null
   confidence: {
@@ -50,8 +85,8 @@ export type Recommendation = {
     reasons: string[]
   }
   inputs: RecommendationInput[]
-  thresholds_crossed: Threshold[]
-  thresholds_not_crossed: Threshold[]
+  thresholds_crossed: ThresholdCrossed[]
+  thresholds_not_crossed: ThresholdNotCrossed[]
   missing_evidence: MissingEvidence[]
   flip_list: FlipListItem[]
   rationale: string
@@ -60,6 +95,11 @@ export type Recommendation = {
 export type Facility = {
   facility_id: string
   name: string
+  location: {
+    lat: number
+    lon: number
+    timezone: string
+  }
   highest_alert_tier: AlertTier
   source_health: SourceHealth
   data_mode: DataMode
@@ -70,6 +110,141 @@ export type Facility = {
     evaluated_at: string
     decision_deadline: string | null
     headline: string
-    approval_status: string
+    approval_status: ApprovalStatus
   }
+}
+
+export type SourceStatus = {
+  source: string
+  status: 'fresh' | 'stale' | 'missing'
+  fetched_at: string | null
+  age_seconds: number | null
+  max_age_seconds: number
+}
+
+export type Approval = {
+  id: string
+  evaluation_id: string
+  action: 'approve' | 'reject' | 'override'
+  final_posture: Posture
+  actor: string
+  reason: string | null
+  acted_at_wall: string
+}
+
+export type FacilityStatus = {
+  facility_id: string
+  evaluation: Recommendation
+  approval: Approval | null
+  notification_id: string | null
+  sources: SourceStatus[]
+}
+
+export type EmployeeGroup =
+  | 'essential'
+  | 'onsite_telework_eligible'
+  | 'onsite_not_telework_eligible'
+  | 'already_teleworking'
+  | 'detail_elsewhere'
+  | 'on_leave_or_off'
+  | 'contractor'
+
+export type ChannelType = 'email' | 'sms' | 'push' | 'voice'
+
+export type Employee = {
+  employee_id: string
+  name: string
+  group: EmployeeGroup
+  assignment_type: 'assigned' | 'detail_in' | 'detail_out' | 'contractor'
+  shift_start: string
+  shift_end: string
+  work_status_today: 'onsite' | 'telework' | 'leave' | 'off'
+  essential: boolean
+  telework_eligible: boolean
+  commute_county: string
+  channels: { type: ChannelType; address: string }[]
+  comm_needs: string[]
+  supervisor_id: string | null
+}
+
+export type ApprovalResponse = {
+  approval: Approval
+  notification_id: string | null
+}
+
+export type PackageRecipient = {
+  employee_id: string
+  included: boolean
+  group: EmployeeGroup
+  reason: string
+  message_id?: string
+  channel_plan?: ChannelType[]
+}
+
+export type DeliveryStatus = 'queued' | 'sent' | 'delivered' | 'simulated' | 'failed' | 'acknowledged'
+
+export type Delivery = {
+  delivery_id: string
+  recipient_id: string
+  channel: ChannelType
+  real: boolean
+  status: DeliveryStatus
+  status_at_wall: string
+}
+
+export type EscalationStep = {
+  step: string
+  label: string
+  due_sim: string
+  fired_at_sim: string | null
+}
+
+// Same shape for GET /package-preview (preview: true) and GET /api/notifications/{id}.
+export type NotificationPackage = {
+  notification_id: string | null
+  evaluation_id: string
+  approval_id: string | null
+  standing_policy: 'shelter_in_place' | null
+  preview: boolean
+  ack_deadline: string | null
+  next_update: string | null
+  package: {
+    recipients: PackageRecipient[]
+    messages: { id: string; group: EmployeeGroup; text: string }[]
+  }
+  deliveries: Delivery[]
+  escalation: EscalationStep[]
+}
+
+export type WhatIfResponse = {
+  hypothetical: true
+  whatif_id: string
+  based_on: string
+  result: Recommendation
+  changed_fields: string[]
+}
+
+export type ReplayResult = {
+  identical: boolean
+  diff: { path: string; stored: unknown; replayed: unknown }[]
+}
+
+export type DecisionRecord = {
+  evaluation: Recommendation
+  chain: string[]
+  evidence: {
+    snapshot_id: string
+    source: string
+    url: string
+    fetched_at_wall: string
+    fetched_at_sim: string
+    http_status: number | null
+    ok: boolean
+    raw_payload: unknown
+  }[]
+  approval: Approval | null
+  notification: NotificationPackage | null
+  deliveries: (Delivery & { status_history: { status: DeliveryStatus; at_wall: string; at_sim: string }[] })[]
+  timers: Record<string, unknown>[]
+  audit_log: Record<string, unknown>[]
 }

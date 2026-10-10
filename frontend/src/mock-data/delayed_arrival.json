@@ -1,0 +1,123 @@
+{
+  "hypothetical": false,
+  "evaluation_id": "eval_0012",
+  "supersedes": "eval_0011",
+  "facility_id": "kc-service-center",
+  "evaluated_at": "2027-01-14T03:20:00-06:00",
+  "policy_version": "policy-2026-10-10.1",
+  "data_mode": "live",
+  "posture": "delayed_arrival",
+  "raw_posture": "delayed_arrival",
+  "held_by_hysteresis": false,
+  "parameters": {
+    "delay_until": "2027-01-14T10:00:00-06:00",
+    "next_update": "2027-01-14T07:30:00-06:00"
+  },
+  "safety_instruction": null,
+  "decision_deadline": "2027-01-14T04:45:00-06:00",
+  "confidence": {
+    "level": "high",
+    "reasons": [
+      "all sources fresh",
+      "certainty Likely",
+      "onset under 12 h away"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "in_1",
+      "role": "drove",
+      "source": "NWS alert",
+      "label": "Ice Storm Warning",
+      "value": {
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Expected"
+      },
+      "onset": "2027-01-14T05:00:00-06:00",
+      "ends": "2027-01-14T09:00:00-06:00",
+      "fetched_at": "2027-01-14T03:19:12-06:00",
+      "snapshot_id": "snap_0412",
+      "stale": false
+    },
+    {
+      "id": "in_2",
+      "role": "drove",
+      "source": "NWS forecast grid",
+      "label": "Forecast ice accumulation",
+      "value": 0.4,
+      "unit": "in",
+      "fetched_at": "2027-01-14T03:15:03-06:00",
+      "snapshot_id": "snap_0409",
+      "stale": false
+    },
+    {
+      "id": "in_3",
+      "role": "context",
+      "source": "USGS gauge 06893000",
+      "label": "Missouri River stage, Kansas City",
+      "value": 11.2,
+      "unit": "ft",
+      "fetched_at": "2027-01-14T03:15:40-06:00",
+      "snapshot_id": "snap_0410",
+      "stale": false
+    }
+  ],
+  "thresholds_crossed": [
+    {
+      "id": "T1",
+      "input_id": "in_1",
+      "cutoff": "Warning",
+      "actual": "Warning"
+    },
+    {
+      "id": "T2",
+      "input_id": "in_1",
+      "cutoff": "Severe or Extreme",
+      "actual": "Severe"
+    },
+    {
+      "id": "T3",
+      "input_id": "in_1",
+      "cutoff": "Likely or Observed",
+      "actual": "Likely"
+    },
+    {
+      "id": "T6",
+      "input_id": "in_2",
+      "cutoff": 0.25,
+      "actual": 0.4,
+      "unit": "in",
+      "margin": 0.15,
+      "anchor": "NWS Kansas City/Pleasant Hill: Ice Storm Warning for ice accumulation of 0.25 inch or greater for a storm event. St. Louis and Omaha also use 1/4 inch.",
+      "anchor_url": "https://www.weather.gov/eax/eaxwwacriteria2"
+    }
+  ],
+  "thresholds_not_crossed": [
+    {
+      "id": "T9",
+      "input_id": "in_3",
+      "cutoff": 29,
+      "actual": 11.2,
+      "unit": "ft",
+      "distance": 17.8
+    }
+  ],
+  "missing_evidence": [],
+  "flip_list": [
+    {
+      "change": "Forecast ice falls below 0.25 in",
+      "resulting_posture": "unscheduled_leave_or_telework"
+    },
+    {
+      "change": "Warning is downgraded to a Watch",
+      "resulting_posture": "normal_operations",
+      "note": "elevated monitoring, re-evaluate in 60 min"
+    },
+    {
+      "change": "Hazard runs past 15:00",
+      "resulting_posture": "closure"
+    }
+  ],
+  "rationale": "Recommend a delayed arrival until 10:00 AM on January 14. An Ice Storm Warning (severity Severe, certainty Likely) covers 5:00 to 9:00 AM, and forecast ice of 0.4 in exceeds the 0.25 in cutoff by 0.15 in during the arrival window. The Missouri River gauge was checked at 11.2 ft, 17.8 ft below action stage, and is not a factor. Confidence is high. A decision is needed by 4:45 AM."
+}
