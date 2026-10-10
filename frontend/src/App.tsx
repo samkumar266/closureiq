@@ -1,13 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-
-function Watchlist() {
-  return (
-    <main className="min-h-screen p-8">
-      <h1 className="text-3xl font-semibold">Watchlist</h1>
-      <p className="mt-2 text-slate-600">Facilities requiring attention will appear here.</p>
-    </main>
-  )
-}
+import { Watchlist } from './pages/Watchlist'
 
 function Facility() {
   return (
@@ -18,12 +10,22 @@ function Facility() {
   )
 }
 
+function Record() {
+  return (
+    <main className="min-h-screen p-8">
+      <h1 className="text-3xl font-semibold">Decision record</h1>
+      <p className="mt-2 text-slate-600">Record details will appear here.</p>
+    </main>
+  )
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Watchlist />} />
         <Route path="/facilities/:id" element={<Facility />} />
+        <Route path="/records/:id" element={<Record />} />
       </Routes>
     </BrowserRouter>
   )

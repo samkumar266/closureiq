@@ -1,5 +1,5 @@
 export type Posture =
-  | 'normal'
+  | 'normal_operations'
   | 'delayed_arrival'
   | 'early_dismissal'
   | 'unscheduled_leave_or_telework'
@@ -11,8 +11,8 @@ export type PostureTheme = {
 }
 
 export const postureTheme: Record<Posture, PostureTheme> = {
-  normal: {
-    label: 'Normal',
+  normal_operations: {
+    label: 'Normal operations',
     color: '#16a34a',
   },
   delayed_arrival: {
