@@ -16,9 +16,11 @@ export type EventHandler = (event: MessageEvent) => void
 const subscribers = new Map<EventName, Set<EventHandler>>(
   eventNames.map((eventName) => [eventName, new Set<EventHandler>()]),
 )
+const reconnectHandlers = new Set<() => void>()
 
 let eventSource: EventSource | null = null
 let hookUsers = 0
+let hasConnectedBefore = false
 
 function openEventSource() {
   if (eventSource) {
@@ -26,6 +28,12 @@ function openEventSource() {
   }
 
   eventSource = new EventSource('/api/events')
+  eventSource.onopen = () => {
+    if (hasConnectedBefore) {
+      reconnectHandlers.forEach((handler) => handler())
+    }
+    hasConnectedBefore = true
+  }
 
   for (const eventName of eventNames) {
     eventSource.addEventListener(eventName, (event) => {
@@ -39,6 +47,7 @@ function openEventSource() {
 function closeEventSource() {
   eventSource?.close()
   eventSource = null
+  hasConnectedBefore = false
 }
 
 export function useEventSource() {
@@ -66,5 +75,12 @@ export function useEventSource() {
     [],
   )
 
-  return { subscribe }
+  const onReconnect = useCallback((handler: () => void) => {
+    reconnectHandlers.add(handler)
+    return () => {
+      reconnectHandlers.delete(handler)
+    }
+  }, [])
+
+  return { subscribe, onReconnect }
 }
