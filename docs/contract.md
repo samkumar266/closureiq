@@ -116,7 +116,7 @@ The dashboard renders this object and nothing else. Fixtures in `mocks/` are the
 
 `gauge` is `null` for facilities without one.
 
-**Roster** (`GET /api/facilities/{id}/roster`): `{ "employees": [ { employee_id, name, group, assignment_type, shift_start, shift_end, work_status_today, essential, telework_eligible, commute_county, channels[], comm_needs[], supervisor_id } ] }`. Names are synthetic. `group` is one of `essential`, `onsite_telework_eligible`, `onsite_not_telework_eligible`, `already_teleworking`, `detail_elsewhere`, `on_leave_or_off`, `contractor`. `comm_needs` holds flags only, never reasons.
+**Roster** (`GET /api/facilities/{id}/roster`): `{ "employees": [ { employee_id, name, group, assignment_type, shift_start, shift_end, work_status_today, essential, telework_eligible, commute_county, channels[], comm_needs[], supervisor_id } ] }`. Names are synthetic. `group` is one of `essential`, `onsite_telework_eligible`, `onsite_not_telework_eligible`, `already_teleworking`, `detail_elsewhere`, `on_leave_or_off`, `contractor`. `comm_needs` holds flags only, never reasons (`spanish`, `large_print`, `voice_call_first`). `channels` is a list of `{ "type": "email" | "sms" | "push" | "voice", "address": "..." }`, in the order to try. Every employee has an email channel. Only email is real in the demo. Sample rosters are in `mocks/seed/` (Kansas City 25 people, St. Louis 8, Omaha 8) and the three profiles are in `mocks/seed/facility_profiles.json`. All emails use the fake `closureiq.example` domain and all phone numbers use the fictional 555-01xx range.
 
 **Status** (`GET /api/facilities/{id}/status`)
 
@@ -256,4 +256,4 @@ The architecture doc is inconsistent in a few places. These are the values to us
 
 ## Fixtures
 
-`mocks/` holds one recommendation JSON per scenario plus `facilities.json` for the Watchlist. Each file is an independent, synthetic scenario, so evaluation dates differ between files. They are not recordings of real alerts. Real recorded payloads for `DATA_MODE=replay` are captured later. Still to come: roster (HAC-18), package preview and notification (HAC-40), status.
+`mocks/` holds one recommendation JSON per scenario plus `facilities.json` for the Watchlist. Each file is an independent, synthetic scenario, so evaluation dates differ between files. They are not recordings of real alerts. Real recorded payloads for `DATA_MODE=replay` are captured later. `mocks/seed/` holds the facility profiles and rosters (HAC-18). Still to come: package preview and notification (HAC-40), status.

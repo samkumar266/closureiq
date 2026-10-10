@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+!.env.example
+data
+node_modules
+frontend/node_modules
+frontend/dist
+__pycache__
+*.pyc
+.venv
+.DS_Store

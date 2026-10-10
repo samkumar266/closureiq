@@ -1,0 +1,210 @@
+{
+  "employees": [
+    {
+      "employee_id": "e_101",
+      "name": "Renee Dubois",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "St. Louis County MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "renee.dubois@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "314-555-0101"
+        },
+        {
+          "type": "push",
+          "address": "device-e_101"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": null
+    },
+    {
+      "employee_id": "e_102",
+      "name": "Andre Washington",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "St. Louis MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "andre.washington@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "314-555-0102"
+        },
+        {
+          "type": "push",
+          "address": "device-e_102"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_101"
+    },
+    {
+      "employee_id": "e_103",
+      "name": "Carla Mendes",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "St. Charles MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "carla.mendes@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "314-555-0103"
+        },
+        {
+          "type": "push",
+          "address": "device-e_103"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_101"
+    },
+    {
+      "employee_id": "e_104",
+      "name": "Owen Gallagher",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "St. Louis County MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "owen.gallagher@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "314-555-0104"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_101"
+    },
+    {
+      "employee_id": "e_105",
+      "name": "Sunita Rao",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Madison IL",
+      "channels": [
+        {
+          "type": "email",
+          "address": "sunita.rao@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "314-555-0105"
+        },
+        {
+          "type": "push",
+          "address": "device-e_105"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_101"
+    },
+    {
+      "employee_id": "e_106",
+      "name": "Terrence Boyd",
+      "group": "onsite_not_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "St. Louis MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "terrence.boyd@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "314-555-0106"
+        }
+      ],
+      "comm_needs": [
+        "large_print"
+      ],
+      "supervisor_id": "e_101"
+    },
+    {
+      "employee_id": "e_107",
+      "name": "Ingrid Larsen",
+      "group": "already_teleworking",
+      "assignment_type": "remote",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "teleworking",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "St. Clair IL",
+      "channels": [
+        {
+          "type": "email",
+          "address": "ingrid.larsen@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "314-555-0107"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_101"
+    },
+    {
+      "employee_id": "e_108",
+      "name": "Paul Okonkwo",
+      "group": "on_leave_or_off",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "on_leave",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "St. Louis MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "paul.okonkwo@closureiq.example"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_101"
+    }
+  ]
+}
