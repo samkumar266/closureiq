@@ -1,0 +1,102 @@
+{
+  "hypothetical": false,
+  "evaluation_id": "eval_0033",
+  "supersedes": "eval_0032",
+  "facility_id": "kc-service-center",
+  "evaluated_at": "2026-10-14T14:30:00-05:00",
+  "policy_version": "policy-2026-10-10.1",
+  "data_mode": "live",
+  "posture": "normal_operations",
+  "raw_posture": "normal_operations",
+  "held_by_hysteresis": false,
+  "parameters": {
+    "monitoring": "elevated",
+    "next_update": "2026-10-14T14:45:00-05:00"
+  },
+  "safety_instruction": null,
+  "decision_deadline": null,
+  "confidence": {
+    "level": "low",
+    "reasons": [
+      "NWS alerts source is missing: last good snapshot is 25 min old, limit is 10 min"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "in_1",
+      "role": "context",
+      "source": "NWS alerts",
+      "label": "Last good alert snapshot: Severe Thunderstorm Watch",
+      "value": {
+        "active_count": 1,
+        "highest_tier": "watch",
+        "event": "Severe Thunderstorm Watch"
+      },
+      "fetched_at": "2026-10-14T14:05:10-05:00",
+      "snapshot_id": "snap_0330",
+      "stale": true
+    },
+    {
+      "id": "in_2",
+      "role": "context",
+      "source": "NWS forecast grid",
+      "label": "Forecast peak wind gust, next 24 h",
+      "value": 49,
+      "unit": "mph",
+      "fetched_at": "2026-10-14T14:15:02-05:00",
+      "snapshot_id": "snap_0334",
+      "stale": false
+    },
+    {
+      "id": "in_3",
+      "role": "context",
+      "source": "USGS gauge 06893000",
+      "label": "Missouri River stage, Kansas City",
+      "value": 15.1,
+      "unit": "ft",
+      "fetched_at": "2026-10-14T14:15:40-05:00",
+      "snapshot_id": "snap_0335",
+      "stale": false
+    }
+  ],
+  "thresholds_crossed": [],
+  "thresholds_not_crossed": [
+    {
+      "id": "T4",
+      "input_id": "in_2",
+      "cutoff": 58,
+      "actual": 49,
+      "unit": "mph",
+      "distance": 9
+    },
+    {
+      "id": "T9",
+      "input_id": "in_3",
+      "cutoff": 29,
+      "actual": 15.1,
+      "unit": "ft",
+      "distance": 13.9
+    }
+  ],
+  "missing_evidence": [
+    {
+      "source": "NWS alerts",
+      "reason": "Request timed out, and the retry after 5 s also failed",
+      "last_good_snapshot_id": "snap_0330",
+      "last_good_age_minutes": 25,
+      "max_age_minutes": 10
+    }
+  ],
+  "flip_list": [
+    {
+      "change": "NWS alerts recover and show no Warning",
+      "resulting_posture": "normal_operations",
+      "note": "confidence returns to high"
+    },
+    {
+      "change": "NWS alerts recover and show a Warning that starts after 15:00, with gusts of 58 mph or more",
+      "resulting_posture": "early_dismissal"
+    }
+  ],
+  "rationale": "Recommend normal operations with elevated monitoring, but this is not an all-clear. NWS alerts could not be retrieved, and the last good copy is 25 minutes old, past the 10 minute limit, so an active warning cannot be ruled out. The forecast peak gust is 49 mph, 9 mph below the 58 mph cutoff, and the Missouri River gauge reads 15.1 ft, 13.9 ft below action stage. Confidence is low. The next evaluation runs at 2:45 PM."
+}

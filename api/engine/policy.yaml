@@ -1,0 +1,203 @@
+# ClosureIQ policy file. Draft v1, written Saturday 2026-10-10 for HAC-36.
+# The engine reads this file. It never hard-codes a threshold, a window or a lead time.
+# Every threshold carries the text and URL that justify it. A cutoff without an anchor does not ship.
+#
+# status values:
+#   verified    = the number was read from the cited page on checked_on
+#   confirm     = typical value, read the cited page (or the local office page) before the pitch
+#   assumption  = a team choice. Say so out loud in the pitch
+#
+# This file is modeled on OPM operating-status categories. It is an assumption, not real USDA policy.
+
+policy_version: policy-2026-10-10.1
+checked_on: 2026-10-10
+
+postures:
+  # Mildest first. The worst hazard wins. This order is a team assumption.
+  - normal_operations
+  - delayed_arrival
+  - early_dismissal
+  - unscheduled_leave_or_telework
+  - closure
+
+hazard_classes:
+  - thunderstorm_wind
+  - winter_storm
+  - flood
+
+# Which NWS event names count as which hazard class and tier. Severity alone does not tell a watch from a warning.
+events:
+  thunderstorm_wind:
+    warning:  ["Severe Thunderstorm Warning", "High Wind Warning", "Tornado Warning", "Extreme Wind Warning"]
+    watch:    ["Severe Thunderstorm Watch", "High Wind Watch", "Tornado Watch"]
+    advisory: ["Wind Advisory"]
+  winter_storm:
+    warning:  ["Winter Storm Warning", "Ice Storm Warning", "Blizzard Warning"]
+    watch:    ["Winter Storm Watch", "Ice Storm Watch", "Blizzard Watch"]
+    advisory: ["Winter Weather Advisory", "Freezing Rain Advisory"]
+  flood:
+    warning:  ["Flood Warning", "Flash Flood Warning"]
+    watch:    ["Flood Watch", "Flash Flood Watch"]
+    advisory: ["Flood Advisory"]
+
+thresholds:
+  - id: T1
+    hazard: all
+    input: NWS alert tier
+    cutoff: Warning
+    effect: Allows delay, dismissal or closure
+    anchor: "NWS: a Warning is issued when a hazardous event is occurring or has a very high probability of occurrence."
+    anchor_url: https://weather.gov/dtx/wwa_defs
+    status: verified
+    note: Page is from the Detroit/Pontiac office. Swap in a national NWS definitions page if one turns up.
+
+  - id: T2
+    hazard: all
+    input: NWS alert severity field
+    cutoff: [Severe, Extreme]
+    effect: Allows dismissal and closure
+    anchor: "OASIS CAP v1.2, severity: Severe = significant threat to life or property; Extreme = extraordinary threat to life or property."
+    anchor_url: https://docs.oasis-open.org/emergency/cap/v1.2/CAP-v1.2-os.html
+    status: assumption
+    note: The field meanings are verified. Choosing Severe as the cutoff is a team choice.
+
+  - id: T3
+    hazard: all
+    input: NWS alert certainty field
+    cutoff: [Likely, Observed]
+    effect: Needed for any posture above unscheduled leave or telework
+    anchor: "OASIS CAP v1.2, certainty: Likely = p above about 50%; Observed = determined to have occurred or to be ongoing."
+    anchor_url: https://docs.oasis-open.org/emergency/cap/v1.2/CAP-v1.2-os.html
+    status: assumption
+    note: The field meanings are verified. Choosing Likely as the cutoff is a team choice.
+
+  - id: T4
+    hazard: thunderstorm_wind
+    input: Forecast wind gust
+    cutoff: 58
+    unit: mph
+    effect: Numeric trigger
+    anchor: "NWS Kansas City/Pleasant Hill and St. Louis: Severe Thunderstorm Warning for wind gusts of 58 mph (50 kt) or greater; High Wind Warning for gusts of 58 mph or greater."
+    anchor_url: https://www.weather.gov/eax/eaxwwacriteria
+    anchor_urls_extra: [https://www.weather.gov/lsx/criteria]
+    status: verified
+    note: Verified for Kansas City and St. Louis. The Omaha criteria page could not be fetched, so confirm Omaha.
+
+  - id: T5
+    hazard: thunderstorm_wind
+    input: Sustained wind
+    cutoff: 40
+    unit: mph
+    duration_min: 60
+    effect: Numeric trigger
+    anchor: "NWS Kansas City/Pleasant Hill and St. Louis: High Wind Warning for sustained winds of 40 mph or greater for one hour."
+    anchor_url: https://www.weather.gov/eax/eaxwwacriteria
+    anchor_urls_extra: [https://www.weather.gov/lsx/criteria]
+    status: verified
+    note: Offices vary. Confirm Omaha. Kansas City says the wind is not directly associated with convection.
+
+  - id: T6
+    hazard: winter_storm
+    input: Ice accumulation
+    cutoff: 0.25
+    unit: in
+    effect: Numeric trigger
+    anchor: "NWS Kansas City/Pleasant Hill: Ice Storm Warning for ice accumulation of 0.25 inch or greater for a storm event. St. Louis and Omaha also use 1/4 inch."
+    anchor_url: https://www.weather.gov/eax/eaxwwacriteria2
+    anchor_urls_extra: [https://www.weather.gov/lsx/criteria, https://www.weather.gov/oax/winter-products]
+    status: verified
+
+  - id: T7
+    hazard: flood
+    input: Gauge stage, Missouri River at Kansas City (KCDM7)
+    cutoff: 32
+    unit: ft
+    effect: Numeric trigger (minor flood stage)
+    anchor: "NOAA National Water Prediction Service flood categories for gauge KCDM7: action 29 ft, minor 32 ft, moderate 35 ft, major 49 ft."
+    anchor_url: https://api.water.noaa.gov/nwps/v1/gauges/KCDM7
+    status: verified
+
+  - id: T8
+    hazard: flood
+    input: Gauge stage, Missouri River at Kansas City (KCDM7)
+    cutoff: 35
+    unit: ft
+    effect: Counts as severity Extreme (moderate flood stage)
+    anchor: "NOAA NWPS flood category for gauge KCDM7: moderate 35 ft."
+    anchor_url: https://api.water.noaa.gov/nwps/v1/gauges/KCDM7
+    status: verified
+    note: The stage is verified. Treating moderate flood as severity Extreme is a team choice.
+
+  - id: T9
+    hazard: flood
+    input: Gauge stage, Missouri River at Kansas City (KCDM7)
+    cutoff: 29
+    unit: ft
+    effect: Raises monitoring only (action stage)
+    anchor: "NOAA NWPS flood category for gauge KCDM7: action 29 ft."
+    anchor_url: https://api.water.noaa.gov/nwps/v1/gauges/KCDM7
+    status: verified
+
+  - id: T10
+    hazard: all
+    input: Clearing buffer after the hazard ends
+    cutoff: 60
+    unit: min
+    effect: Sets delay_until = hazard end + 60 min
+    anchor: Team choice.
+    anchor_url: null
+    status: assumption
+
+  - id: T11
+    hazard: all
+    input: Commute buffer and notification lead time
+    cutoff: {commute_buffer_min: 45, notification_lead_min: 90}
+    effect: Sets the decision deadline
+    anchor: Team choice, stored in the facility profile.
+    anchor_url: null
+    status: assumption
+
+  - id: T12
+    hazard: winter_storm
+    input: Forecast snowfall
+    cutoff: 5
+    unit: in
+    effect: Numeric trigger (proposed addition to the original T1 to T11)
+    anchor: "NWS Kansas City/Pleasant Hill and St. Louis: Winter Storm Warning for 5 inches or more of snow. Omaha uses 5 to 6 inches depending on location."
+    anchor_url: https://www.weather.gov/eax/eaxwwacriteria2
+    anchor_urls_extra: [https://www.weather.gov/lsx/criteria, https://www.weather.gov/oax/winter-products]
+    status: confirm
+    note: Verified for Kansas City and St. Louis. Omaha is 5 to 6 inches depending on location, so confirm the exact Omaha value.
+
+timing:
+  arrival_window_from_shift_starts: true      # for example 07:00 to 08:30
+  departure_window:
+    start_before_close_min: 60
+    end_after_close_min: 30
+  decision_deadline: "earliest affected departure minus notification_lead_min"
+  shelter_in_place:
+    onset_within_min: 30
+    approval_window_min: 10
+    standing_policy: true                      # the only automatic send
+
+confidence:
+  freshness_limit_min: {alerts: 10, forecast: 180, gauge: 120}   # starting values, tune them
+  high:   {sources: all fresh, certainty: [Likely, Observed], onset_within_h: 12}
+  medium: {any_of: [one source stale, certainty Possible, "onset 12 to 36 h away"]}
+  low:    {any_of: [a required source missing, "certainty Unlikely or Unknown", "onset over 36 h away"]}
+
+hysteresis:
+  upgrade: immediate
+  downgrade_needs_evaluations: 2
+  spacing_min: 15
+
+escalation:
+  manager_nonresponse:
+    window_divisor: 4                          # W = (deadline - now) / 4
+    window_min: 5
+    window_max: 30
+    simultaneous_if: ["Tornado Warning active", "deadline under 30 min away"]
+  unacknowledged:
+    after_send_min: 20                         # min(20 min after send, departure time minus 10 min)
+    before_departure_min: 10
+  unresolved_after_extra_windows: 1

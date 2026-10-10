@@ -1,0 +1,96 @@
+{
+  "hypothetical": false,
+  "evaluation_id": "eval_0021",
+  "supersedes": "eval_0020",
+  "facility_id": "omaha-service-center",
+  "evaluated_at": "2027-01-13T15:00:00-06:00",
+  "policy_version": "policy-2026-10-10.1",
+  "data_mode": "live",
+  "posture": "unscheduled_leave_or_telework",
+  "raw_posture": "unscheduled_leave_or_telework",
+  "held_by_hysteresis": false,
+  "parameters": {
+    "next_update": "2027-01-13T21:00:00-06:00"
+  },
+  "safety_instruction": null,
+  "decision_deadline": "2027-01-14T04:45:00-06:00",
+  "confidence": {
+    "level": "medium",
+    "reasons": [
+      "all sources fresh",
+      "onset 12 to 36 h away"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "in_1",
+      "role": "drove",
+      "source": "NWS alert",
+      "label": "Winter Storm Warning",
+      "value": {
+        "severity": "Moderate",
+        "certainty": "Likely",
+        "urgency": "Expected"
+      },
+      "onset": "2027-01-14T06:00:00-06:00",
+      "ends": "2027-01-14T18:00:00-06:00",
+      "fetched_at": "2027-01-13T14:59:10-06:00",
+      "snapshot_id": "snap_0214",
+      "stale": false
+    },
+    {
+      "id": "in_2",
+      "role": "drove",
+      "source": "NWS forecast grid",
+      "label": "Forecast ice accumulation",
+      "value": 0.1,
+      "unit": "in",
+      "fetched_at": "2027-01-13T14:45:03-06:00",
+      "snapshot_id": "snap_0212",
+      "stale": false
+    }
+  ],
+  "thresholds_crossed": [
+    {
+      "id": "T1",
+      "input_id": "in_1",
+      "cutoff": "Warning",
+      "actual": "Warning"
+    },
+    {
+      "id": "T3",
+      "input_id": "in_1",
+      "cutoff": "Likely or Observed",
+      "actual": "Likely"
+    }
+  ],
+  "thresholds_not_crossed": [
+    {
+      "id": "T2",
+      "input_id": "in_1",
+      "cutoff": "Severe or Extreme",
+      "actual": "Moderate"
+    },
+    {
+      "id": "T6",
+      "input_id": "in_2",
+      "cutoff": 0.25,
+      "actual": 0.1,
+      "unit": "in",
+      "distance": 0.15
+    }
+  ],
+  "missing_evidence": [],
+  "flip_list": [
+    {
+      "change": "Severity rises to Severe and forecast ice reaches 0.25 in",
+      "resulting_posture": "closure"
+    },
+    {
+      "change": "Warning is downgraded to a Watch",
+      "resulting_posture": "normal_operations",
+      "note": "elevated monitoring, re-evaluate in 60 min"
+    }
+  ],
+  "rationale": "Recommend unscheduled leave or telework for January 14, until the next update at 9:00 PM tonight. A Winter Storm Warning covers 6:00 AM to 6:00 PM, but its severity is Moderate, below the Severe cutoff, and forecast ice of 0.1 in is 0.15 in under the 0.25 in cutoff. A delay, dismissal or closure is not supported yet. Confidence is medium because the hazard starts more than 12 hours from now. A decision is needed by 4:45 AM."
+}

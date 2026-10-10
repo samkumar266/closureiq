@@ -1,0 +1,140 @@
+{
+  "hypothetical": false,
+  "evaluation_id": "eval_0051",
+  "supersedes": "eval_0050",
+  "facility_id": "kc-service-center",
+  "evaluated_at": "2026-10-15T20:30:00-05:00",
+  "policy_version": "policy-2026-10-10.1",
+  "data_mode": "live",
+  "posture": "closure",
+  "raw_posture": "closure",
+  "held_by_hysteresis": false,
+  "parameters": {
+    "closed_from": "2026-10-16T07:30:00-05:00",
+    "closed_until": "2026-10-16T16:00:00-05:00",
+    "next_update": "2026-10-16T02:00:00-05:00"
+  },
+  "safety_instruction": null,
+  "decision_deadline": "2026-10-16T04:45:00-05:00",
+  "confidence": {
+    "level": "high",
+    "reasons": [
+      "all sources fresh",
+      "certainty Likely",
+      "onset under 12 h away"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "in_1",
+      "role": "drove",
+      "source": "NWS alert",
+      "label": "Flood Warning",
+      "value": {
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Expected"
+      },
+      "onset": "2026-10-16T00:00:00-05:00",
+      "ends": "2026-10-19T06:00:00-05:00",
+      "fetched_at": "2026-10-15T20:29:15-05:00",
+      "snapshot_id": "snap_0508",
+      "stale": false
+    },
+    {
+      "id": "in_2",
+      "role": "drove",
+      "source": "USGS gauge 06893000",
+      "label": "Missouri River stage, Kansas City",
+      "value": 36.4,
+      "unit": "ft",
+      "fetched_at": "2026-10-15T20:15:41-05:00",
+      "snapshot_id": "snap_0505",
+      "stale": false
+    },
+    {
+      "id": "in_3",
+      "role": "context",
+      "source": "NWPS gauge KCDM7",
+      "label": "Flood categories, Missouri River at Kansas City",
+      "value": {
+        "action": 29,
+        "minor": 32,
+        "moderate": 35,
+        "major": 49
+      },
+      "unit": "ft",
+      "fetched_at": "2026-10-15T07:00:12-05:00",
+      "snapshot_id": "snap_0471",
+      "stale": false
+    }
+  ],
+  "thresholds_crossed": [
+    {
+      "id": "T1",
+      "input_id": "in_1",
+      "cutoff": "Warning",
+      "actual": "Warning"
+    },
+    {
+      "id": "T2",
+      "input_id": "in_1",
+      "cutoff": "Severe or Extreme",
+      "actual": "Severe"
+    },
+    {
+      "id": "T3",
+      "input_id": "in_1",
+      "cutoff": "Likely or Observed",
+      "actual": "Likely"
+    },
+    {
+      "id": "T7",
+      "input_id": "in_2",
+      "cutoff": 32,
+      "actual": 36.4,
+      "unit": "ft",
+      "margin": 4.4,
+      "anchor": "NOAA National Water Prediction Service flood categories for gauge KCDM7: action 29 ft, minor 32 ft, moderate 35 ft, major 49 ft.",
+      "anchor_url": "https://api.water.noaa.gov/nwps/v1/gauges/KCDM7"
+    },
+    {
+      "id": "T8",
+      "input_id": "in_2",
+      "cutoff": 35,
+      "actual": 36.4,
+      "unit": "ft",
+      "margin": 1.4,
+      "anchor": "NOAA NWPS flood category for gauge KCDM7: moderate 35 ft.",
+      "anchor_url": "https://api.water.noaa.gov/nwps/v1/gauges/KCDM7"
+    },
+    {
+      "id": "T9",
+      "input_id": "in_2",
+      "cutoff": 29,
+      "actual": 36.4,
+      "unit": "ft",
+      "margin": 7.4,
+      "anchor": "NOAA NWPS flood category for gauge KCDM7: action 29 ft.",
+      "anchor_url": "https://api.water.noaa.gov/nwps/v1/gauges/KCDM7"
+    }
+  ],
+  "thresholds_not_crossed": [],
+  "missing_evidence": [],
+  "flip_list": [
+    {
+      "change": "Gauge falls below 32 ft (minor flood stage)",
+      "resulting_posture": "unscheduled_leave_or_telework"
+    },
+    {
+      "change": "Flood Warning is downgraded to a Flood Watch",
+      "resulting_posture": "normal_operations",
+      "note": "elevated monitoring, re-evaluate in 60 min"
+    },
+    {
+      "change": "Warning ends before 15:00 on October 16",
+      "resulting_posture": "delayed_arrival"
+    }
+  ],
+  "rationale": "Recommend closure on October 16, from 7:30 AM to 4:00 PM. A Flood Warning (severity Severe, certainty Likely) runs from midnight on October 16 until 6:00 AM on October 19, covering both the arrival and departure windows. The Missouri River gauge reads 36.4 ft, 1.4 ft above the 35 ft moderate flood stage and 4.4 ft above the 32 ft minor flood stage. Confidence is high. A decision is needed by 4:45 AM."
+}

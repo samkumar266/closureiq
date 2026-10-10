@@ -1,0 +1,13 @@
+# Port 80 only for now. HTTPS needs a domain name.
+:80 {
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1      # keeps the live-update stream (SSE) flowing
+		}
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
