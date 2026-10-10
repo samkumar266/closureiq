@@ -1,0 +1,187 @@
+"""Focused tests for guarded chat behavior."""
+
+import ast
+import json
+
+from fastapi.testclient import TestClient
+
+from ai.chat import stream_agent_events, validate_answer
+from api.app.main import create_app
+from api.engine import FacilityPolicy, InputEvidence, Recommendation
+from api.store import SQLiteStore
+
+
+def _facility() -> FacilityPolicy:
+    return FacilityPolicy(
+        facility_id="omaha-service-center",
+        open_time="07:30",
+        close_time="16:00",
+        arrival_start="07:00",
+        arrival_end="08:30",
+        departure_start="15:00",
+        departure_end="16:30",
+        commute_buffer_min=45,
+        notification_lead_min=90,
+        policy_version="policy-2026-10-10.1",
+    )
+
+
+def _seed(store: SQLiteStore) -> Recommendation:
+    with open("mocks/normal.json", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    recommendation = Recommendation.model_validate(payload)
+    evidence = [InputEvidence.model_validate(item) for item in payload["inputs"]]
+    store.save_evaluation(recommendation, evidence, _facility())
+    return recommendation
+
+
+def test_answer_validation_requires_matching_units_and_supports_local_dates() -> None:
+    facts = [
+        {
+            "rain": {"value": 10.4, "unit": "in"},
+            "when": "2026-01-15T07:30:00-06:00",
+        }
+    ]
+    assert validate_answer("Rain is 10 in on January 15, 2026.", facts, timezone="America/Chicago")
+    assert not validate_answer("Rain is 10 mph.", facts, timezone="America/Chicago")
+    assert not validate_answer("Rain is 10%.", facts, timezone="America/Chicago")
+    range_facts = [{"range": {"min": 1, "max": 2, "unit": "in"}}]
+    assert validate_answer("Rain is between 1 and 2 in.", range_facts, timezone="America/Chicago")
+    assert not validate_answer("Rain is between 1 and 3 in.", range_facts, timezone="America/Chicago")
+
+
+def test_answer_validation_normalizes_aware_times_and_rounding() -> None:
+    facts = [{"amount": {"value": 10.4, "unit": "in"}, "at": "2026-07-01T12:30:00Z"}]
+    assert validate_answer("It is 10 in at 7:30 AM.", facts, timezone="America/Chicago")
+    assert not validate_answer("It is 11 in at 7:30 AM.", facts, timezone="America/Chicago")
+
+
+def test_chat_route_emits_sse_and_audits_question_tool_and_answer(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+
+    class FakeAgent:
+        def stream_async(self, prompt):
+            assert prompt == "Why?"
+
+            async def events():
+                yield {
+                    "current_tool_use": {
+                        "name": "get_evaluation",
+                        "input": {"evaluation_id": base.evaluation_id},
+                    }
+                }
+                yield {"tool_result": {"evaluation_id": base.evaluation_id}}
+                yield {"data": "The posture is normal_operations."}
+
+            return events()
+
+    monkeypatch.setattr("api.app.main.build_chat_agent", lambda *args: FakeAgent())
+    client = TestClient(create_app(store))
+    response = client.post(
+        "/api/agent/chat",
+        json={
+            "facility_id": base.facility_id,
+            "evaluation_id": base.evaluation_id,
+            "message": "Why?",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "event: tool\n" in response.text
+    assert "event: token\n" in response.text
+    assert "event: done\n" in response.text
+    assert '"validated": true' in response.text
+    assert all(entry["kind"] in {"agent_question", "agent_tool", "agent_answer"} for entry in store.audit_entries())
+
+
+def test_chat_provider_failure_before_first_event_returns_503(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+
+    class FailingAgent:
+        def stream_async(self, prompt):
+            async def events():
+                raise RuntimeError("provider down")
+                yield {}
+
+            return events()
+
+    monkeypatch.setattr("api.app.main.build_chat_agent", lambda *args: FailingAgent())
+    response = TestClient(create_app(store)).post(
+        "/api/agent/chat",
+        json={
+            "facility_id": base.facility_id,
+            "evaluation_id": base.evaluation_id,
+            "message": "Why?",
+        },
+    )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "agent_unavailable"
+
+
+def test_chat_provider_failure_after_first_event_is_replaced(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+
+    class PartialAgent:
+        def stream_async(self, prompt):
+            async def events():
+                yield {"data": "partial"}
+                raise RuntimeError("provider lost")
+
+            return events()
+
+    monkeypatch.setattr("api.app.main.build_chat_agent", lambda *args: PartialAgent())
+    response = TestClient(create_app(store)).post(
+        "/api/agent/chat",
+        json={
+            "facility_id": base.facility_id,
+            "evaluation_id": base.evaluation_id,
+            "message": "Why?",
+        },
+    )
+    assert response.status_code == 200
+    assert "event: replaced\n" in response.text
+    assert '"validated": false' in response.text
+
+
+def test_ai_modules_do_not_import_write_or_approval_boundaries() -> None:
+    for path in ("ai/agent.py", "ai/chat.py", "ai/model.py", "ai/smoke.py"):
+        tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
+        imports = [
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        ]
+        imports += [
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+        ]
+        assert not any(name.startswith("api.notify") or "approval" in name for name in imports)
+
+
+def test_stream_retries_only_before_first_event() -> None:
+    attempts = 0
+
+    class RetryAgent:
+        def stream_async(self, prompt):
+            nonlocal attempts
+            attempts += 1
+
+            async def events():
+                if attempts == 1:
+                    raise RuntimeError("transient")
+                yield {"data": "ok"}
+
+            return events()
+
+    async def collect():
+        return [event async for event in stream_agent_events(RetryAgent(), "x")]
+
+    import asyncio
+
+    assert asyncio.run(collect()) == [{"data": "ok"}]
+    assert attempts == 2

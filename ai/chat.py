@@ -19,6 +19,11 @@ from .model import get_model
 _NUMBER_UNIT = re.compile(
     r"(?<![\w_])(?P<number>\d+(?:\.\d+)?)\s*(?P<unit>%|[a-zA-Z][a-zA-Z0-9/²-]*)"
 )
+_RANGE = re.compile(
+    r"\b(?:between\s+)?(?P<low>\d+(?:\.\d+)?)\s*(?:-|and|to)\s*"
+    r"(?P<high>\d+(?:\.\d+)?)\s*(?P<unit>%|[a-zA-Z][a-zA-Z0-9/²-]*)",
+    re.I,
+)
 _TIME = re.compile(r"\b(?P<hour>\d{1,2}):(?P<minute>\d{2})\s*(?P<ampm>AM|PM)\b", re.I)
 _ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _MONTH_DATE = re.compile(
@@ -107,7 +112,18 @@ def validate_answer(
     except Exception:
         return False
     facts = _collect_facts(tool_results, local_zone)
+    excluded_spans = [match.span() for match in _TIME.finditer(answer)]
+    ranges = list(_RANGE.finditer(answer))
+    excluded_spans.extend(match.span() for match in ranges)
+    for match in ranges:
+        unit = _normal_unit(match.group("unit"))
+        if unit is None or not _number_supported(match.group("low"), unit, facts["numbers"]):
+            return False
+        if not _number_supported(match.group("high"), unit, facts["numbers"]):
+            return False
     for match in _NUMBER_UNIT.finditer(answer):
+        if any(start <= match.start() < end for start, end in excluded_spans):
+            continue
         unit = _normal_unit(match.group("unit"))
         if unit is None:
             return False
@@ -139,7 +155,7 @@ def _collect_facts(
                 if key in {"evaluated_at", "decision_deadline", "onset", "ends"}:
                     visit(child, unit)
                 else:
-                    visit(child, child_unit if key == "value" else unit)
+                    visit(child, child_unit)
             return
         if isinstance(value, list):
             for child in value:
@@ -177,6 +193,7 @@ def _number_supported(
     for expected, expected_unit in candidates:
         if expected_unit != unit:
             continue
+        expected_places = max(0, -expected.as_tuple().exponent)
         step = Decimal(1).scaleb(-max(answer_places, expected_places))
         if abs(expected - actual) <= step / 2:
             return True
