@@ -92,3 +92,21 @@ def test_list_tool_result_is_decoded_for_the_validator():
     event = {"message": {"role": "user", "content": [{"toolResult": {
         "toolUseId": "t2", "status": "success", "content": [{"text": json.dumps(rows)}]}}]}}
     assert _tool_results(event) == [{"items": rows}]
+
+
+def test_preamble_before_a_tool_call_is_dropped(client, monkeypatch):
+    class FakeAgent:
+        async def stream_async(self, prompt):
+            yield {"data": "I'll check the evaluation."}
+            yield {"message": {"role": "assistant", "content": [
+                {"text": "I'll check the evaluation."},
+                {"toolUse": {"toolUseId": "t1", "name": "get_evaluation", "input": {"evaluation_id": client.evaluation_id}}}]}}
+            yield {"message": {"role": "user", "content": [{"toolResult": {
+                "toolUseId": "t1", "status": "success", "content": [{"text": json.dumps({"posture": "closure"})}]}}]}}
+            yield {"data": "The engine recommends closure."}
+            yield {"message": {"role": "assistant", "content": [{"text": "The engine recommends closure."}]}}
+    monkeypatch.setattr("ai.chat.build_backend_chat_agent", lambda *a: FakeAgent())
+    r = ask(client)
+    tokens = [json.loads(b.split("\n")[1][len("data: "):])["text"]
+              for b in r.text.strip().split("\n\n") if b.startswith("event: token")]
+    assert tokens == ["The engine recommends closure."]

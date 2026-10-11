@@ -37,6 +37,7 @@ async def _stream_chat(
     prompt: str,
 ):
     answer_parts: list[str] = []
+    pending: list[str] = []
     tool_results: list[dict[str, Any]] = []
     seen_tools: set[str] = set()
     whatif_id: str | None = None
@@ -57,10 +58,28 @@ async def _stream_chat(
                 possible = result.get("whatif_id") or result.get("evaluation_id")
                 if isinstance(possible, str):
                     whatif_id = possible
+        # Hold each model message's text until the message is complete: text written in a
+        # turn that calls a tool is a preamble ("I'll check...") and is dropped; only the
+        # final message is validated, then sent and recorded.
         text = _event_text(event)
         if text:
-            answer_parts.append(text)
-            yield _sse("token", {"text": text})
+            pending.append(text)
+        message = event.get("message") if isinstance(event, dict) else None
+        if isinstance(message, dict) and message.get("role") == "assistant":
+            calls_tool = any(isinstance(item, dict) and "toolUse" in item for item in message.get("content") or [])
+            if calls_tool:
+                pending.clear()
+            else:
+                for item in flush():
+                    yield item
+
+    def flush():
+        """Move the finished message's text into the answer. Nothing is sent to the
+        client until the answer has passed validation (see below)."""
+        if pending:
+            answer_parts.append("".join(pending))
+            pending.clear()
+        return ()
 
     try:
         async for item in consume(first_event):
@@ -68,6 +87,8 @@ async def _stream_chat(
         async for event in events:
             async for item in consume(event):
                 yield item
+        for item in flush():  # streams without message events (test doubles) end here
+            yield item
     except Exception:
         fallback = base.rationale
         yield _sse("replaced", {"text": fallback})
@@ -92,8 +113,9 @@ async def _stream_chat(
     validation = validate(answer, tool_results, timezone=facility.timezone)
     validated = validation.valid
     if not validated:
+        # Retry once. The retry is checked against this turn's tool results, which
+        # the model already has in its conversation.
         answer_parts.clear()
-        tool_results.clear()
         try:
             retry_prompt = (
                 f"{prompt}\n\nYour previous answer could not be verified: "
@@ -104,6 +126,8 @@ async def _stream_chat(
             async for event in retry_events:
                 async for item in consume(event):
                     yield item
+            for item in flush():
+                yield item
         except Exception:
             pass
         retry_answer = "".join(answer_parts)
@@ -112,6 +136,8 @@ async def _stream_chat(
         ).valid
         if validated:
             answer = retry_answer
+    if validated and answer:
+        yield _sse("token", {"text": answer})
     if not validated:
         yield _sse(
             "replaced",
