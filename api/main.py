@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,12 +15,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.app.routes import router, error_payload
+from api.app.routes import router, error_payload, evaluate_and_record
 from api.app.events import event_hub
 from api.config import settings
 from api.facilities import FACILITIES
-from api.ingest.poller import poll_alerts, poll_slow_sources, startup_poll
+from api.ingest.poller import poll_alerts, poll_observations, poll_slow_sources, startup_poll
 from api.store.repository import Store
+
+logger = logging.getLogger("closureiq.scheduler")
 
 
 def create_app(db_path: str | Path | None = None, *, enable_scheduler: bool | None = None,
@@ -34,14 +37,32 @@ def create_app(db_path: str | Path | None = None, *, enable_scheduler: bool | No
     async def lifespan(app: FastAPI):
         nonlocal fallback_scheduler_task
         if scheduler_enabled:
+            async def evaluate_all():
+                # Architecture loop: poll -> store -> evaluate -> SSE. Records only when the decision changes.
+                for facility in FACILITIES.values():
+                    try:
+                        await evaluate_and_record(store, facility, only_if_changed=True)
+                    except Exception:
+                        logger.exception("Scheduled evaluation failed for %s", facility["facility_id"])
+            # DEPRECATED(closureiq) START: alerts poll without the evaluate step.
+            # async def alerts_job():
+            #     await asyncio.gather(*(poll_alerts(store, f) for f in FACILITIES.values()), return_exceptions=True)
+            # DEPRECATED(closureiq) END
             async def alerts_job():
                 await asyncio.gather(*(poll_alerts(store, f) for f in FACILITIES.values()), return_exceptions=True)
+                await asyncio.gather(*(poll_observations(store, f) for f in FACILITIES.values()), return_exceptions=True)
+                await evaluate_all()
             async def timers_job():
                 from api.app import notify_wiring
                 for name, data in notify_wiring.run_due_timers(store, lambda eid: store.get_evaluation(eid)["result"]):
                     await event_hub.publish(name, data)
+            # DEPRECATED(closureiq) START: forecast poll without the evaluate step.
+            # async def slow_job():
+            #     await asyncio.gather(*(poll_slow_sources(store, f, force=False) for f in FACILITIES.values()), return_exceptions=True)
+            # DEPRECATED(closureiq) END
             async def slow_job():
                 await asyncio.gather(*(poll_slow_sources(store, f, force=False) for f in FACILITIES.values()), return_exceptions=True)
+                await evaluate_all()
             if AsyncIOScheduler is not None:
                 scheduler = AsyncIOScheduler(timezone="UTC")
                 scheduler.add_job(alerts_job, "interval", seconds=60, id="nws-alerts-poll", max_instances=1, coalesce=True)

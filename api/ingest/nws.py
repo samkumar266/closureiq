@@ -44,3 +44,9 @@ async def fetch_hourly_forecast(url: str | None) -> FetchResult | None:
         )
     result = await fetch_json("NWS hourly forecast", url)
     return result
+
+
+async def fetch_station_observations(station_id: str, limit: int = 12) -> FetchResult:
+    """Recent measured observations (hourly METARs plus specials) from an airport weather station."""
+    url = f"{NWS_BASE}/stations/{station_id}/observations?limit={limit}"
+    return await fetch_json("NWS station observations", url)

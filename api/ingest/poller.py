@@ -8,7 +8,7 @@ from typing import Any
 
 from api.config import settings
 from api.ingest.http import FetchResult
-from api.ingest.nws import fetch_active_alerts, fetch_point_metadata, fetch_grid_data, fetch_hourly_forecast
+from api.ingest.nws import fetch_active_alerts, fetch_point_metadata, fetch_grid_data, fetch_hourly_forecast, fetch_station_observations
 from api.ingest.usgs import fetch_usgs_gauge, fetch_nwps_categories
 from api.store.repository import Store
 
@@ -19,6 +19,7 @@ SOURCE_MAX_AGE_SECONDS = {
     "NWS hourly forecast": 10800,
     "USGS gauge": 7200,
     "NWS flood categories": 86400,
+    "NWS station observations": 1800,
 }
 SLOW_SOURCE_INTERVALS = {
     "NWS point metadata": 900,
@@ -111,6 +112,19 @@ async def poll_alerts(store: Store, facility: dict) -> dict:
     return _persist(store, facility, result, mode)
 
 
+async def poll_observations(store: Store, facility: dict, *, force: bool = False) -> dict | None:
+    """Measured wind at the facility's airport station (supplementary signal), every 5 minutes when configured."""
+    station = facility.get("observation_station")
+    if not station or not _due(store, facility["facility_id"], "NWS station observations", 300, force):
+        return None
+    mode = store.get_data_mode(settings.data_mode)
+    if mode == "replay":
+        result = _load_fixture("NWS station observations", facility["facility_id"])
+    else:
+        result = await fetch_station_observations(str(station))
+    return _persist(store, facility, result, mode)
+
+
 async def poll_slow_sources(store: Store, facility: dict, *, force: bool = False) -> list[dict]:
     """Poll point metadata and slow evidence independently using successful cached URLs."""
     mode = store.get_data_mode(settings.data_mode)
@@ -195,6 +209,9 @@ async def poll_slow_sources(store: Store, facility: dict, *, force: bool = False
 async def poll_facility(store: Store, facility: dict, *, force_slow: bool = False) -> list[dict]:
     """Poll alerts and due supplementary sources for one facility."""
     rows = [await poll_alerts(store, facility)]
+    observation = await poll_observations(store, facility, force=force_slow)
+    if observation:
+        rows.append(observation)
     rows.extend(await poll_slow_sources(store, facility, force=force_slow))
     return rows
 

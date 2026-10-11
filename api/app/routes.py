@@ -112,6 +112,8 @@ def _source_list(store: Store, facility: dict) -> list[dict]:
     sources = ["NWS alerts", "NWS point metadata", "NWS forecast grid", "NWS hourly forecast"]
     if facility.get("gauge"):
         sources.extend(["USGS gauge", "NWS flood categories"])
+    if facility.get("observation_station"):
+        sources.append("NWS station observations")
     return [_status_for_source(store, facility, source) for source in sources]
 
 
@@ -231,18 +233,48 @@ def facility_status(facility_id: str, request: Request):
             "sources": _source_list(store, facility)}
 
 
-@router.post("/facilities/{facility_id}/evaluate")
-async def evaluate_facility(facility_id: str, request: Request):
-    store = store_from_request(request)
-    facility = get_facility(facility_id)
-    if not facility:
-        raise_contract_error(404, "not_found", "Unknown facility", {"facility_id": facility_id})
+def _alert_ids(result: dict) -> list[str]:
+    for item in result.get("inputs", []):
+        if "alert" in str(item.get("source", "")).lower() and isinstance(item.get("value"), list):
+            return sorted(str(alert.get("id")) for alert in item["value"])
+    return []
+
+
+def _decision_fingerprint(result: dict) -> dict:
+    """The parts of a result that change what the approver sees or decides.
+
+    next_update is left out on purpose: it is "now + N minutes" and changes on every run.
+    """
+    params = {k: v for k, v in (result.get("parameters") or {}).items() if k != "next_update"}
+    return {
+        "posture": result.get("posture"),
+        "raw_posture": result.get("raw_posture"),
+        "confidence": (result.get("confidence") or {}).get("level"),
+        "decision_deadline": result.get("decision_deadline"),
+        "safety_instruction": result.get("safety_instruction"),
+        "parameters": params,
+        "thresholds_crossed": sorted(str(t.get("id")) for t in result.get("thresholds_crossed", [])),
+        "missing_evidence": sorted(str(m.get("source")) for m in result.get("missing_evidence", [])),
+        "alert_ids": _alert_ids(result),
+    }
+
+
+async def evaluate_and_record(store: Store, facility: dict, *, only_if_changed: bool = False) -> tuple[dict, bool]:
+    """Run the engine on the latest stored evidence and append the evaluation.
+
+    Shared by POST /evaluate (always records) and the scheduler after each poll (only_if_changed=True).
+    Recording an unchanged result every minute would make every open approval stale (409) and
+    restart escalation timers, so the scheduler records only when the decision fingerprint changes.
+    Returns (result, recorded).
+    """
+    facility_id = facility["facility_id"]
     previous = store.latest_evaluation(facility_id)
     previous_result = previous["result"] if previous else None
-    polled = await poll_facility(store, facility, force_slow=True)
     evidence = _context_snapshots(store, facility_id)
     now = datetime.now(timezone.utc)
     result = evaluate_recommendation(store, facility, evidence, evaluated_at=now, previous_result=previous_result)
+    if only_if_changed and previous and _decision_fingerprint(previous["result"]) == _decision_fingerprint(result):
+        return previous["result"], False
     evidence_ids = list(dict.fromkeys(s["id"] for s in evidence))
     evaluation = store.append_evaluation(
         facility_id=facility_id, evaluated_at_wall=now.isoformat(),
@@ -259,6 +291,41 @@ async def evaluate_facility(facility_id: str, request: Request):
         "facility_id": facility_id, "evaluation_id": saved["evaluation_id"],
         "posture": saved["posture"], "confidence": saved["confidence"], "changed": changed,
     })
+    return saved, True
+
+
+@router.post("/facilities/{facility_id}/evaluate")
+async def evaluate_facility(facility_id: str, request: Request):
+    store = store_from_request(request)
+    facility = get_facility(facility_id)
+    if not facility:
+        raise_contract_error(404, "not_found", "Unknown facility", {"facility_id": facility_id})
+    # DEPRECATED(closureiq) START: evaluate steps moved into evaluate_and_record (shared with the scheduler).
+    # previous = store.latest_evaluation(facility_id)
+    # previous_result = previous["result"] if previous else None
+    # polled = await poll_facility(store, facility, force_slow=True)
+    # evidence = _context_snapshots(store, facility_id)
+    # now = datetime.now(timezone.utc)
+    # result = evaluate_recommendation(store, facility, evidence, evaluated_at=now, previous_result=previous_result)
+    # evidence_ids = list(dict.fromkeys(s["id"] for s in evidence))
+    # evaluation = store.append_evaluation(
+    #     facility_id=facility_id, evaluated_at_wall=now.isoformat(),
+    #     evaluated_at_sim=store.clock_now_sim(), data_mode=store.get_data_mode(settings.data_mode),
+    #     evidence_ids=evidence_ids, engine_version=result.get("engine_version", "shared-engine-not-yet-integrated"),
+    #     policy_version=facility.get("policy_version", "policy-2026-10-10.1"), result=result,
+    #     posture=result["posture"], confidence=result["confidence"]["level"],
+    #     supersedes=previous["id"] if previous else None,
+    # )
+    # saved = evaluation["result"]
+    # notify_wiring.on_evaluation_created(store, saved, facility)
+    # changed = not previous or previous["result"].get("posture") != saved.get("posture") or previous["result"].get("confidence") != saved.get("confidence")
+    # await event_hub.publish("evaluation.created", {
+    #     "facility_id": facility_id, "evaluation_id": saved["evaluation_id"],
+    #     "posture": saved["posture"], "confidence": saved["confidence"], "changed": changed,
+    # })
+    # DEPRECATED(closureiq) END
+    polled = await poll_facility(store, facility, force_slow=True)
+    saved, _ = await evaluate_and_record(store, facility)
     if not any(row.get("ok") for row in polled):
         return JSONResponse(status_code=503, content=error_payload(
             "source_unavailable", "No source answered; a low-confidence evaluation was recorded.",

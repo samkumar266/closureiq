@@ -45,6 +45,8 @@ EXTRA_FACILITIES: dict[str, dict] = {
         "assembly_point": "North parking lot",
         "manager_id": "e_001", "backup_manager_id": "e_002", "on_call_id": "e_003",
         "gauge": None,
+        # Measured wind (supplementary signal) from the nearest airport weather station: Kingman Airport.
+        "observation_station": "KIGM",
         "policy_version": "policy-2026-10-10.1",
     },
     # Backup demo facility: under a live NWS Coastal Flood Warning on 2026-10-11.
@@ -62,6 +64,8 @@ EXTRA_FACILITIES: dict[str, dict] = {
         "assembly_point": "North parking lot",
         "manager_id": "e_001", "backup_manager_id": "e_002", "on_call_id": "e_003",
         "gauge": None,
+        # Measured wind (supplementary signal) from the nearest airport weather station: San Diego International.
+        "observation_station": "KSAN",
         "policy_version": "policy-2026-10-10.1",
     },
 }
