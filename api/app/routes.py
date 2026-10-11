@@ -611,20 +611,27 @@ class _AgentBackend:
             out["raw_payload"] = snap.get("raw_payload_json")
         return out
 
-    def list_affected_employees(self, group: str | None = None) -> list[dict]:
+    def list_affected_employees(self, group: str | None = None) -> dict:
+        """Whole roster in compact rows (25 people fit easily). filter: 'cannot_telework'
+        (telework_eligible false), 'essential', a group name, or None for everyone."""
         roster = notify_wiring.load_roster(self.base["facility_id"])
-        rows = [{k: e[k] for k in ("employee_id", "group", "essential", "telework_eligible", "work_status_today")}
-                for e in roster]
-        return [r for r in rows if not group or r["group"] == group]
+        rows = [{k: e.get(k) for k in ("employee_id", "name", "group", "essential", "telework_eligible",
+                                        "work_status_today")} for e in roster]
+        key = (group or "").strip().lower().replace(" ", "_").replace("-", "_")
+        if key in {"cannot_telework", "not_telework_eligible", "telework=0", "telework_eligible=false", "no_telework"}:
+            rows = [r for r in rows if not r["telework_eligible"]]
+        elif key == "essential":
+            rows = [r for r in rows if r["essential"]]
+        elif key:
+            rows = [r for r in rows if r["group"] == key]
+        return {"filter": group, "employees": rows}
 
     def get_thresholds(self) -> list[dict]:
         return thresholds_response()["thresholds"]
 
     def run_what_if(self, overrides: dict) -> dict:
-        out = run_what_if(self.store, self.base, overrides)
-        # agent_stream picks up the what-if id from a hypothetical result's evaluation_id
-        return {**out["result"], "evaluation_id": out["whatif_id"], "whatif_id": out["whatif_id"],
-                "based_on": out["based_on"], "changed_fields": out["changed_fields"]}
+        """The what-if route's own output; ai.chat.summarize_whatif shrinks it for the model."""
+        return run_what_if(self.store, self.base, overrides)
 
 
 class _AuditSink:
