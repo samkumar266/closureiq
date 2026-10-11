@@ -311,7 +311,7 @@ export function FacilityDecision() {
                 </div>
                 {/* DEPRECATED(closureiq): offline prop removed with the fixture fallback. */}
                 {/* <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} offline={data.fromFixture} /> */}
-                <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} />
+                <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} recommendation={recommendation} />
                 {/* DEPRECATED(closureiq): <AffectedEmployees employees={data.employees} /> */}
                 <WhoGetsTold
                   commuteBufferMin={data.facility.commute_buffer_min}

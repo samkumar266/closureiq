@@ -1,9 +1,16 @@
 import { useRef, useState } from 'react'
+import { alertsFrom, alertTier, findInput } from '../../alerts'
 import { ApiError, streamChat } from '../../api'
+import { formatNumber } from '../../format'
+import { postureOrder, postureTheme } from '../../theme'
+import { thresholdShortNames } from '../../thresholds'
+import type { Recommendation } from '../../types'
 
 type AskPanelProps = {
   facilityId: string
   evaluationId: string
+  // The current evaluation, used to suggest questions that fit it.
+  recommendation: Recommendation
   // DEPRECATED(closureiq): offline only existed for the fixture fallback; agentOffline below covers a 503.
   // offline: boolean
 }
@@ -20,16 +27,61 @@ type Turn = {
   streaming: boolean
 }
 
-const suggestions = [
-  'Why is this the recommendation?',
-  'What if the warning is upgraded to Severe?',
-  'Which employees cannot telework?',
-  'What evidence is missing or stale?',
-]
+// DEPRECATED(closureiq) START: fixed questions; "upgraded to Severe" made no sense when the warning was already Severe.
+// const suggestions = [
+//   'Why is this the recommendation?',
+//   'What if the warning is upgraded to Severe?',
+//   'Which employees cannot telework?',
+//   'What evidence is missing or stale?',
+// ]
+// DEPRECATED(closureiq) END
+
+// Suggested questions built from the current evaluation, so every click asks something meaningful.
+function suggestionsFor(recommendation: Recommendation) {
+  const questions = ['Why is this the recommendation?']
+  const gustCrossed = recommendation.thresholds_crossed.find((t) => t.id === 'T4')
+  const gustChecked = recommendation.thresholds_not_crossed.find((t) => t.id === 'T4')
+  if (gustCrossed) {
+    questions.push(`What if gusts drop below ${formatNumber(Number(gustCrossed.cutoff))} mph?`)
+  } else if (gustChecked) {
+    questions.push(`What if gusts reach ${formatNumber(Number(gustChecked.cutoff) + 4)} mph?`)
+  }
+  const tiers = alertsFrom(findInput(recommendation, 'alert')).map(alertTier)
+  if (tiers.includes('watch') && !tiers.includes('warning')) questions.push('What if the Watch becomes a Warning?')
+  if (recommendation.missing_evidence.length > 0) questions.push('What evidence is missing or stale?')
+  questions.push('Which employees cannot telework?')
+  return questions
+}
+
+// Display-only tidy-up of a verified answer: plain threshold and posture names, and no long decimals.
+// The agent's checked wording is otherwise unchanged; the proper fix is the agent prompt in ai/.
+function tidy(text: string) {
+  let result = text
+    .replace(/\bstation T(\d{1,2})\b/g, (match, n: string) =>
+      thresholdShortNames[`T${n}`] ? `station-measured ${thresholdShortNames[`T${n}`]}` : match,
+    )
+    .replace(/\bT(\d{1,2})\b/g, (match, n: string) => thresholdShortNames[`T${n}`] ?? match)
+  for (const posture of postureOrder) {
+    result = result.replaceAll(posture, postureTheme[posture].label.toLowerCase())
+  }
+  return result
+    .replace(/\b(\d+)\.(\d{2,})\b/g, (_, whole: string, fraction: string) => Number(`${whole}.${fraction}`).toFixed(1))
+    .replace(/\b(\d+)\.0\b/g, '$1')
+}
+
+// What the agent is doing while it works (tool events arrive before the answer).
+const toolStatus: Record<string, string> = {
+  get_evaluation: 'Reading the evaluation…',
+  get_evidence: 'Reading the stored NWS data…',
+  list_affected_employees: 'Checking the roster…',
+  get_thresholds: 'Reading the threshold table…',
+  run_what_if: 'Running the what-if through the engine…',
+}
 
 // DEPRECATED(closureiq): offline prop removed.
 // export function AskPanel({ facilityId, evaluationId, offline }: AskPanelProps) {
-export function AskPanel({ facilityId, evaluationId }: AskPanelProps) {
+export function AskPanel({ facilityId, evaluationId, recommendation }: AskPanelProps) {
+  const suggestions = suggestionsFor(recommendation)
   const [turns, setTurns] = useState<Turn[]>([])
   const [draft, setDraft] = useState('')
   const [agentOffline, setAgentOffline] = useState(false)
@@ -121,7 +173,15 @@ export function AskPanel({ facilityId, evaluationId }: AskPanelProps) {
               {turn.error ? (
                 <p className="text-red-700">{turn.error}</p>
               ) : (
-                <p className="whitespace-pre-wrap text-slate-800">{turn.answer || (turn.streaming ? 'Thinking…' : '')}</p>
+                // DEPRECATED(closureiq): raw answer and a bare "Thinking…" while waiting.
+                // <p className="whitespace-pre-wrap text-slate-800">{turn.answer || (turn.streaming ? 'Thinking…' : '')}</p>
+                <p className="whitespace-pre-wrap text-slate-800">
+                  {turn.answer
+                    ? tidy(turn.answer)
+                    : turn.streaming
+                      ? `${toolStatus[turn.tools[turn.tools.length - 1]] ?? 'Thinking…'} Answers are checked against the engine's numbers before they appear.`
+                      : ''}
+                </p>
               )}
               {turn.replaced && (
                 <p className="mt-2 text-xs font-semibold text-amber-800">

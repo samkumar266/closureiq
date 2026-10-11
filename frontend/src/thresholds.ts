@@ -15,3 +15,19 @@ export const thresholdNames: Record<string, string> = {
 }
 
 export const thresholdName = (id: string) => thresholdNames[id] ?? id
+
+// Short nouns for use inside a sentence when tidying agent answers ("crossed warning level, severity and
+// certainty"). No numbers here: the agent's sentence already states the cutoff.
+export const thresholdShortNames: Record<string, string> = {
+  T1: 'warning level',
+  T2: 'severity',
+  T3: 'certainty',
+  T4: 'gust threshold',
+  T5: 'sustained-wind threshold',
+  T6: 'ice threshold',
+  T7: 'minor flood stage',
+  T8: 'moderate flood stage',
+  T9: 'action stage',
+  T10: 'clearing buffer',
+  T11: 'commute and notification lead times',
+}
