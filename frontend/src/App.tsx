@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { DeliveryTracker } from './pages/DeliveryTracker'
 import { FacilityDecision } from './pages/FacilityDecision'
 import { Watchlist } from './pages/Watchlist'
 
@@ -17,6 +18,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Watchlist />} />
         <Route path="/facilities/:id" element={<FacilityDecision />} />
+        <Route path="/notifications/:id" element={<DeliveryTracker />} />
         <Route path="/records/:id" element={<Record />} />
       </Routes>
     </BrowserRouter>
