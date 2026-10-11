@@ -11,9 +11,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from ai.chat import build_chat_agent, stream_agent_events, validate_answer
+from ai.chat import build_chat_agent, stream_agent_events
+from ai.validator import validate
 from ..engine import Recommendation, run_what_if
-from ..store import SQLiteStore
+from ..legacy_store import SQLiteStore
 
 
 class WhatIfRequest(BaseModel):
@@ -143,6 +144,7 @@ def create_app(store: SQLiteStore | None = None) -> FastAPI:
             _stream_chat(
                 first_event,
                 events,
+                agent=agent,
                 base=base,
                 facility=facility,
                 store=api_store,
@@ -172,29 +174,42 @@ def _append_audit(store: SQLiteStore, kind: str, detail: dict[str, Any]) -> None
         raise _error(500, "audit_unavailable", "audit logging failed") from exc
 
 
+def _append_stream_audit(
+    store: SQLiteStore, kind: str, detail: dict[str, Any]
+) -> bool:
+    """Record stream audit state without raising after SSE output begins."""
+    try:
+        store.append(kind, detail)
+    except Exception:
+        return False
+    return True
+
+
 async def _stream_chat(
     first_event: Any,
     events: Any,
     *,
+    agent: Any,
     base: Recommendation,
     facility: Any,
     store: SQLiteStore,
     prompt: str,
 ):
-    del prompt
     answer_parts: list[str] = []
     tool_results: list[dict[str, Any]] = []
     seen_tools: set[str] = set()
     whatif_id: str | None = None
+    audit_failed = False
 
     async def consume(event: Any):
-        nonlocal whatif_id
+        nonlocal audit_failed, whatif_id
         tool = _tool_event(event)
         if tool is not None:
             tool_key = json.dumps(tool, sort_keys=True, default=str)
             if tool_key not in seen_tools:
                 seen_tools.add(tool_key)
-                _append_audit(store, "agent_tool", tool)
+                if not _append_stream_audit(store, "agent_tool", tool):
+                    audit_failed = True
                 yield _sse("tool", tool)
         result = _tool_result(event)
         if result is not None:
@@ -217,7 +232,7 @@ async def _stream_chat(
     except Exception:
         fallback = base.rationale
         yield _sse("replaced", {"text": fallback})
-        _append_audit(
+        _append_stream_audit(
             store,
             "agent_answer",
             {
@@ -225,6 +240,7 @@ async def _stream_chat(
                 "text": fallback,
                 "validated": False,
                 "whatif_id": whatif_id,
+                "audit_error": True,
             },
         )
         yield _sse(
@@ -234,11 +250,41 @@ async def _stream_chat(
         return
 
     answer = "".join(answer_parts)
-    validated = validate_answer(answer, tool_results, timezone=facility.timezone)
+    validation = validate(answer, tool_results, timezone=facility.timezone)
+    validated = validation.valid
     if not validated:
-        yield _sse("replaced", {"text": base.rationale})
+        answer_parts.clear()
+        tool_results.clear()
+        try:
+            retry_prompt = (
+                f"{prompt}\n\nYour previous answer could not be verified: "
+                f"{validation.reason or 'a factual claim was unsupported'}. "
+                "Answer again using only current tool results and omit unsupported figures."
+            )
+            retry_events = stream_agent_events(agent, retry_prompt)
+            async for event in retry_events:
+                async for item in consume(event):
+                    yield item
+        except Exception:
+            pass
+        retry_answer = "".join(answer_parts)
+        validated = validate(
+            retry_answer, tool_results, timezone=facility.timezone
+        ).valid
+        if validated:
+            answer = retry_answer
+    if not validated:
+        yield _sse(
+            "replaced",
+            {
+                "text": (
+                    f"{base.rationale} Figures could not be verified; "
+                    "showing the engine rationale."
+                )
+            },
+        )
     final_text = answer if validated else base.rationale
-    _append_audit(
+    if not _append_stream_audit(
         store,
         "agent_answer",
         {
@@ -246,13 +292,15 @@ async def _stream_chat(
             "text": final_text,
             "validated": validated,
             "whatif_id": whatif_id,
+            "audit_error": audit_failed,
         },
-    )
+    ):
+        audit_failed = True
     yield _sse(
         "done",
         {
             "evaluation_id": base.evaluation_id,
-            "validated": validated,
+            "validated": validated and not audit_failed,
             "whatif_id": whatif_id,
         },
     )

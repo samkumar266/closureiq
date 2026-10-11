@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 
 from api.app.main import create_app
 from api.engine import FacilityPolicy, InputEvidence, Recommendation
-from api.store import SQLiteStore, ensure_real_recommendation
+from api.legacy_store import SQLiteStore 
+from api.legacy_store import ensure_real_recommendation
 
 
 def _facility() -> FacilityPolicy:

@@ -1,6 +1,7 @@
 """Deterministic ClosureIQ policy engine."""
 
 from .evaluate import evaluate
+from .engine import policy_thresholds
 from .models import (
     EvaluationContext,
     FacilityPolicy,
@@ -22,5 +23,6 @@ __all__ = [
     "WhatIfResult",
     "SourceHealth",
     "evaluate",
+    "policy_thresholds",
     "run_what_if",
 ]

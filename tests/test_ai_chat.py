@@ -5,10 +5,10 @@ import json
 
 from fastapi.testclient import TestClient
 
-from ai.chat import stream_agent_events, validate_answer
+from ai.chat import build_chat_agent, stream_agent_events, validate_answer
 from api.app.main import create_app
 from api.engine import FacilityPolicy, InputEvidence, Recommendation
-from api.store import SQLiteStore
+from api.legacy_store import SQLiteStore
 
 
 def _facility() -> FacilityPolicy:
@@ -53,7 +53,19 @@ def test_answer_validation_requires_matching_units_and_supports_local_dates() ->
 def test_answer_validation_normalizes_aware_times_and_rounding() -> None:
     facts = [{"amount": {"value": 10.4, "unit": "in"}, "at": "2026-07-01T12:30:00Z"}]
     assert validate_answer("It is 10 in at 7:30 AM.", facts, timezone="America/Chicago")
+    assert validate_answer("It is 10 in at 07:30.", facts, timezone="America/Chicago")
     assert not validate_answer("It is 11 in at 7:30 AM.", facts, timezone="America/Chicago")
+    assert not validate_answer("It is 10 in at 25:30.", facts, timezone="America/Chicago")
+
+
+def test_answer_validation_supports_plain_local_times_and_rejects_invalid_times() -> None:
+    facts = [{"start": "7:30 AM", "end": "10 AM", "review": "22:15"}]
+    assert validate_answer("The start is 07:30.", facts, timezone="America/Chicago")
+    assert validate_answer("The end is 10:00 AM.", facts, timezone="America/Chicago")
+    assert validate_answer("The review is 10:15 PM.", facts, timezone="America/Chicago")
+    assert not validate_answer("The start is 7:60 AM.", facts, timezone="America/Chicago")
+    assert not validate_answer("The end is 25 AM.", facts, timezone="America/Chicago")
+    assert not validate_answer("The review is 22:60.", facts, timezone="America/Chicago")
 
 
 def test_chat_route_emits_sse_and_audits_question_tool_and_answer(tmp_path, monkeypatch) -> None:
@@ -146,6 +158,64 @@ def test_chat_provider_failure_after_first_event_is_replaced(tmp_path, monkeypat
     assert '"validated": false' in response.text
 
 
+def test_chat_retries_once_with_validation_feedback(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+    prompts = []
+
+    class RetryAgent:
+        def stream_async(self, prompt):
+            prompts.append(prompt)
+
+            async def events():
+                yield {"data": "The posture is 99 in." if len(prompts) == 1 else "The posture is normal_operations."}
+
+            return events()
+
+    monkeypatch.setattr("api.app.main.build_chat_agent", lambda *args: RetryAgent())
+    response = TestClient(create_app(store)).post(
+        "/api/agent/chat",
+        json={"facility_id": base.facility_id, "evaluation_id": base.evaluation_id, "message": "Why?"},
+    )
+
+    assert response.status_code == 200
+    assert len(prompts) == 2
+    assert "could not be verified" in prompts[1]
+    assert '"validated": true' in response.text
+
+
+def test_stream_audit_failure_does_not_escape_after_sse(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+
+    calls = 0
+
+    def fail_after_question(kind, detail):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise RuntimeError("disk full")
+
+    monkeypatch.setattr(store, "append", fail_after_question)
+
+    class FakeAgent:
+        def stream_async(self, prompt):
+            async def events():
+                yield {"data": "The posture is normal_operations."}
+
+            return events()
+
+    monkeypatch.setattr("api.app.main.build_chat_agent", lambda *args: FakeAgent())
+    response = TestClient(create_app(store)).post(
+        "/api/agent/chat",
+        json={"facility_id": base.facility_id, "evaluation_id": base.evaluation_id, "message": "Why?"},
+    )
+
+    assert response.status_code == 200
+    assert "event: done\n" in response.text
+    assert '"validated": false' in response.text
+
+
 def test_ai_modules_do_not_import_write_or_approval_boundaries() -> None:
     for path in ("ai/agent.py", "ai/chat.py", "ai/model.py", "ai/smoke.py"):
         tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
@@ -185,3 +255,66 @@ def test_stream_retries_only_before_first_event() -> None:
 
     assert asyncio.run(collect()) == [{"data": "ok"}]
     assert attempts == 2
+
+
+def test_chat_registers_all_five_read_only_tools(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+    captured = {}
+
+    class FakeAgent:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("ai.chat.Agent", FakeAgent)
+    monkeypatch.setattr("ai.chat.get_model", lambda: "fake")
+    build_chat_agent(base, store.get_evidence(base.evaluation_id), _facility(), store)
+
+    assert [tool.__name__ for tool in captured["tools"]] == [
+        "get_evaluation",
+        "get_evidence",
+        "list_affected_employees",
+        "get_thresholds",
+        "run_what_if",
+    ]
+
+
+def test_get_evidence_rejects_snapshot_from_another_evaluation(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+    with open("mocks/delayed_arrival.json", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    other = Recommendation.model_validate(payload).model_copy(
+        update={"evaluation_id": "eval_0099", "facility_id": base.facility_id}
+    )
+    other_evidence = [InputEvidence.model_validate(item) for item in payload["inputs"]]
+    store.save_evaluation(other, other_evidence, _facility())
+    foreign_snapshot = other_evidence[0].snapshot_id
+    captured = {}
+
+    class FakeAgent:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("ai.chat.Agent", FakeAgent)
+    monkeypatch.setattr("ai.chat.get_model", lambda: "fake")
+    build_chat_agent(base, store.get_evidence(base.evaluation_id), _facility(), store)
+    get_evidence = next(
+        item for item in captured["tools"] if item.__name__ == "get_evidence"
+    )
+
+    try:
+        get_evidence(foreign_snapshot)
+    except ValueError as exc:
+        assert str(exc) == "evidence snapshot was not found"
+    else:
+        raise AssertionError("foreign evidence snapshot was accessible")
+
+
+def test_validator_contract_returns_fail_closed_result() -> None:
+    from ai.validator import ValidationResult, validate
+
+    result = validate("Threshold T6 applies.", [{"thresholds_crossed": [{"id": "T6"}]}])
+    assert isinstance(result, ValidationResult)
+    assert result.valid is True
+    assert validate("Threshold T7 applies.", [{"thresholds_crossed": [{"id": "T6"}]}]).valid is False
