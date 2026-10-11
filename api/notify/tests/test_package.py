@@ -65,3 +65,18 @@ def test_identical_input_identical_output(closure_eval, kc_profile, kc_roster):
     a = build_package(closure_eval, kc_profile, kc_roster, now_sim=NOW)
     b = build_package(closure_eval, kc_profile, kc_roster, now_sim=NOW)
     assert json.dumps(a) == json.dumps(b)
+
+
+def test_override_normal_to_closure_fills_times_from_facility_hours(kc_profile, kc_roster):
+    import json as _json
+    from pathlib import Path
+    normal = _json.loads((Path(__file__).resolve().parents[3] / "mocks" / "normal.json").read_text())
+    # 20:31 is after the 16:00 close, so the closure is for the next day
+    pkg = build_preview(normal, kc_profile, kc_roster, "closure", now_sim="2026-10-15T20:31:00-05:00")
+    kinds = [w["type"] for w in pkg["package"]["warnings"]]
+    assert "derived_parameters" in kinds and "missing_parameters" not in kinds
+    text = pkg["package"]["messages"][0]["text"]
+    assert "Fri Oct 16, 7:30 AM until Fri Oct 16, 4:00 PM" in text and "not set yet" not in text.split("Next update")[0]
+    # before close the same day is used
+    pkg = build_preview(normal, kc_profile, kc_roster, "closure", now_sim="2026-10-15T06:00:00-05:00")
+    assert "Thu Oct 15, 7:30 AM" in pkg["package"]["messages"][0]["text"]

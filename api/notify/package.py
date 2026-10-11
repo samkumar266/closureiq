@@ -60,6 +60,33 @@ def ack_deadline(now_sim: datetime, departure: datetime | None) -> datetime:
     return min(by_window, by_departure)
 
 
+def fill_closure_hours(posture: str, parameters: dict, profile: dict,
+                       now_sim: datetime) -> tuple[dict, list[str]]:
+    """An override to closure has no closed_from/closed_until from the engine.
+    Fill them from the facility's open and close hours for the next operating day
+    (today if it has not closed yet). Returns (parameters, keys_filled)."""
+    if posture != "closure":
+        return parameters, []
+    missing = [k for k in ("closed_from", "closed_until") if not parameters.get(k)]
+    if not missing or not profile.get("hours"):
+        return parameters, []
+    tz = ZoneInfo(profile["location"]["timezone"])
+    local_now = now_sim.astimezone(tz)
+
+    def at(day, hhmm):
+        hh, mm = map(int, hhmm.split(":"))
+        return datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)
+    day = local_now.date()
+    if local_now >= at(day, profile["hours"]["close"]):
+        day = day + timedelta(days=1)
+    filled = dict(parameters)
+    defaults = {"closed_from": at(day, profile["hours"]["open"]),
+                "closed_until": at(day, profile["hours"]["close"])}
+    for key in missing:
+        filled[key] = defaults[key].isoformat()
+    return filled, missing
+
+
 def _attach_messages(recipients: list[dict], roster_by_id: dict, render) -> tuple[list, list]:
     """One message per (group, variant) actually used. Returns (messages, warnings)."""
     messages, warnings, ids = [], [], {}
@@ -105,6 +132,8 @@ def build_package(evaluation: dict, profile: dict, roster: list[dict], posture: 
     final_posture = posture or evaluation["posture"]
     parameters = evaluation.get("parameters") or {}
     shelter = standing_policy == "shelter_in_place"
+    parameters, filled = ([parameters, []] if shelter
+                          else fill_closure_hours(final_posture, parameters, profile, now_sim))
     roster_by_id = {e["employee_id"]: e for e in roster}
 
     recipients = select_recipients(roster, final_posture, shelter_in_place=shelter)
@@ -114,6 +143,11 @@ def build_package(evaluation: dict, profile: dict, roster: list[dict], posture: 
         render = lambda group, variant: render_message(group, final_posture, parameters,
                                                        profile["name"], tz_name, variant)
     messages, warnings = _attach_messages(recipients, roster_by_id, render)
+    if filled:
+        warnings.append({"type": "derived_parameters", "message_id": None, "group": None,
+                         "variant": None, "employee_ids": [],
+                         "text": f"{', '.join(filled)} not set by the engine for {final_posture}; "
+                                 "taken from the facility's open and close hours. Check before sending."})
     missing = [k for k in POSTURE_PARAM_KEYS[final_posture] if not parameters.get(k)]
     if missing and not shelter:
         warnings.append({"type": "missing_parameters", "message_id": None, "group": None,
