@@ -52,6 +52,7 @@ def test_get_evaluation_reports_malformed_mock(monkeypatch, tmp_path) -> None:
                     "base_url": "https://example.invalid/v1",
                 },
                 "model_id": "akamai-test",
+                "params": {"max_tokens": 1024},
             },
         ),
     ],
@@ -60,6 +61,8 @@ def test_get_model_selects_provider_configuration(
     monkeypatch, provider, environment, class_name, expected
 ) -> None:
     import importlib
+
+    monkeypatch.delenv("MODEL_MAX_TOKENS", raising=False)
 
     module_name = {
         "AnthropicModel": "strands.models.anthropic",

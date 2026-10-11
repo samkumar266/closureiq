@@ -52,6 +52,8 @@ def get_model() -> Any:
         return OpenAIModel(
             client_args={"api_key": api_key, "base_url": base_url},
             model_id=model_id,
+            # The endpoint's default output limit cut answers off (MaxTokensReachedException).
+            params={"max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "1024"))},
         )
 
     raise ValueError(
