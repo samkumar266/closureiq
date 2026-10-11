@@ -58,5 +58,13 @@ The pitch is 3 minutes of the live app only. No slides. Judges score: usefulness
 ## Commands (confirm and update when each skeleton lands)
 
 - Frontend: `cd frontend && npm install && npm run dev`
-- Backend: `uvicorn api.app.main:app --reload`
+- Backend: 
+```bash
+    python3.11 -m venv .venv
+    source .venv/bin/activate
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    cp .env.example .env
+    python -m uvicorn api.main:app --reload
+```
 - Tests / lint: `pytest`
