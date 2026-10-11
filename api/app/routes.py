@@ -356,25 +356,31 @@ def replay_evaluation(evaluation_id: str, request: Request):
     return {"identical": not diff, "diff": diff}
 
 
+def run_what_if(store: Store, base: dict, overrides: dict) -> dict:
+    """Rerun stored evidence with overrides. Writes only an audit row. Shared by the
+    what-if route and the agent's run_what_if tool."""
+    evidence = store.snapshots_by_ids(base["evidence_ids"])
+    facility = get_facility(base["facility_id"])
+    result = evaluate_recommendation(store, facility, evidence,
+                                     evaluated_at=parse_datetime(base["evaluated_at_wall"]),
+                                     previous_result=base["result"], overrides=overrides,
+                                     hypothetical=True, data_mode=base["data_mode"])
+    result["hypothetical"] = True
+    whatif_id = store._next_id("wif")
+    changed = [key for key in result if key in base["result"] and result[key] != base["result"][key]]
+    store.append_audit("whatif", {"whatif_id": whatif_id, "based_on": base["id"], "evaluation_id": base["id"],
+                                  "overrides": overrides, "result": result, "changed_fields": changed})
+    return {"hypothetical": True, "whatif_id": whatif_id, "based_on": base["id"],
+            "result": result, "changed_fields": changed}
+
+
 @router.post("/evaluations/{evaluation_id}/what-if")
 def what_if(evaluation_id: str, body: WhatIfRequest, request: Request):
     store = store_from_request(request)
     base = store.get_evaluation(evaluation_id)
     if not base:
         raise_contract_error(404, "not_found", "Unknown evaluation", {"evaluation_id": evaluation_id})
-    evidence = store.snapshots_by_ids(base["evidence_ids"])
-    facility = get_facility(base["facility_id"])
-    result = evaluate_recommendation(store, facility, evidence,
-                                     evaluated_at=parse_datetime(base["evaluated_at_wall"]),
-                                     previous_result=base["result"], overrides=body.overrides,
-                                     hypothetical=True, data_mode=base["data_mode"])
-    result["hypothetical"] = True
-    whatif_id = store._next_id("wif")
-    changed = [key for key in result if key in base["result"] and result[key] != base["result"][key]]
-    store.append_audit("whatif", {"whatif_id": whatif_id, "based_on": evaluation_id,
-                                  "overrides": body.overrides, "result": result, "changed_fields": changed})
-    return {"hypothetical": True, "whatif_id": whatif_id, "based_on": evaluation_id,
-            "result": result, "changed_fields": changed}
+    return run_what_if(store, base, body.overrides)
 
 
 @router.get("/thresholds")
@@ -577,12 +583,84 @@ async def acknowledge_delivery(delivery_id: str, request: Request, body: dict = 
             "status": delivery["status"], "status_at_wall": _local_iso(delivery["status_at_wall"], timezone_name)}
 
 
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    facility_id: str
+    evaluation_id: str
+    message: str = Field(min_length=1)
+
+
+class _AgentBackend:
+    """Read-only tools for the agent, backed by the main store (see ai.chat.build_backend_chat_agent)."""
+
+    def __init__(self, store: Store, base: dict):
+        self.store, self.base = store, base
+
+    def get_evidence(self, snapshot_id: str) -> dict:
+        if snapshot_id not in self.base["evidence_ids"]:
+            raise ValueError("evidence snapshot is not part of this evaluation")
+        snap = self.store.get_snapshot(snapshot_id)
+        return {"snapshot_id": snap["id"], "source": snap["source"], "url": snap.get("url"),
+                "fetched_at_wall": snap.get("fetched_at_wall"), "ok": snap.get("ok"),
+                "raw_payload": snap.get("raw_payload_json")}
+
+    def list_affected_employees(self, group: str | None = None) -> list[dict]:
+        roster = notify_wiring.load_roster(self.base["facility_id"])
+        rows = [{k: e[k] for k in ("employee_id", "group", "essential", "telework_eligible", "work_status_today")}
+                for e in roster]
+        return [r for r in rows if not group or r["group"] == group]
+
+    def get_thresholds(self) -> list[dict]:
+        return thresholds_response()["thresholds"]
+
+    def run_what_if(self, overrides: dict) -> dict:
+        out = run_what_if(self.store, self.base, overrides)
+        # agent_stream picks up the what-if id from a hypothetical result's evaluation_id
+        return {**out["result"], "evaluation_id": out["whatif_id"], "whatif_id": out["whatif_id"],
+                "based_on": out["based_on"], "changed_fields": out["changed_fields"]}
+
+
+class _AuditSink:
+    """append(kind, detail) for agent_stream, written to the audit log under the evaluation."""
+
+    def __init__(self, store: Store, evaluation_id: str):
+        self.store, self.evaluation_id = store, evaluation_id
+
+    def append(self, kind: str, detail: dict) -> None:
+        self.store.append_audit(kind, {"evaluation_id": self.evaluation_id, **detail})
+
+
 @router.post("/agent/chat")
-def agent_chat():
-    # AI/Strands implementation is owned by Samanth; fail with the exact contract code.
-    return JSONResponse(status_code=503, content=error_payload(
-        "agent_unavailable", "Agent integration is not installed in Badri's backend slice.", {}
-    ))
+async def agent_chat(body: ChatRequest, request: Request):
+    from types import SimpleNamespace
+    from ai.chat import build_backend_chat_agent, stream_agent_events
+    from api.app.agent_stream import _stream_chat
+
+    store = store_from_request(request)
+    base = store.get_evaluation(body.evaluation_id)
+    if not base or base["facility_id"] != body.facility_id:
+        raise_contract_error(404, "not_found", "Unknown evaluation for this facility",
+                             {"evaluation_id": body.evaluation_id})
+    facility = get_facility(base["facility_id"])
+    audit = _AuditSink(store, body.evaluation_id)
+    audit.append("agent_question", {"facility_id": body.facility_id, "message": body.message})
+    try:
+        agent = build_backend_chat_agent(base["result"], _AgentBackend(store, base))
+    except ValueError as exc:  # model not configured: names the missing variables, never values
+        raise_contract_error(503, "agent_unavailable", f"Agent unavailable: {exc}", {})
+    except Exception:
+        raise_contract_error(503, "agent_unavailable", "Agent unavailable: the model could not be created.", {})
+    try:
+        events = stream_agent_events(agent, body.message)
+        first_event = await events.__anext__()
+    except Exception:
+        raise_contract_error(503, "agent_unavailable", "Agent unavailable: the model provider did not answer.", {})
+    return StreamingResponse(
+        _stream_chat(first_event, events, agent=agent,
+                     base=SimpleNamespace(evaluation_id=base["id"], rationale=base["result"].get("rationale", "")),
+                     facility=SimpleNamespace(timezone=facility["location"]["timezone"]),
+                     store=audit, prompt=body.message),
+        media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.get("/events")
