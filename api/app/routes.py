@@ -17,8 +17,7 @@ from api.ingest.poller import poll_facility, poll_alerts, poll_slow_sources, SOU
 from api.ingest.normalizers import highest_alert_tier, parse_datetime
 from api.app.engine_adapter import evaluate_recommendation, POSTURES
 from api.app.events import event_hub
-from api.app.notification_adapter import build_package, preview_response
-from api.app.roster import get_roster
+from api.app import notify_wiring
 from api.app.thresholds import thresholds_response
 from api.store.repository import Store
 
@@ -211,7 +210,7 @@ def facility_roster(facility_id: str):
     facility = get_facility(facility_id)
     if not facility:
         raise_contract_error(404, "not_found", "Unknown facility", {"facility_id": facility_id})
-    return {"employees": get_roster()}
+    return {"employees": notify_wiring.load_roster(facility_id)}
 
 
 @router.get("/facilities/{facility_id}/status")
@@ -254,6 +253,7 @@ async def evaluate_facility(facility_id: str, request: Request):
         supersedes=previous["id"] if previous else None,
     )
     saved = evaluation["result"]
+    notify_wiring.on_evaluation_created(store, saved, facility)
     changed = not previous or previous["result"].get("posture") != saved.get("posture") or previous["result"].get("confidence") != saved.get("confidence")
     await event_hub.publish("evaluation.created", {
         "facility_id": facility_id, "evaluation_id": saved["evaluation_id"],
@@ -399,7 +399,7 @@ def get_clock(request: Request):
 
 
 @router.post("/clock")
-def set_clock(body: ClockRequest, request: Request):
+async def set_clock(body: ClockRequest, request: Request):
     if body.mode not in {"system", "simulated"}:
         raise_contract_error(400, "bad_request", "mode must be 'system' or 'simulated'")
     if not 0 < body.speed <= 600:
@@ -408,8 +408,11 @@ def set_clock(body: ClockRequest, request: Request):
         parsed = parse_datetime(body.set_to)
         if parsed is None:
             raise_contract_error(400, "bad_request", "set_to must be an ISO 8601 timestamp with an offset")
-    result = store_from_request(request).set_clock(body.mode, body.speed, body.set_to)
+    store = store_from_request(request)
+    result = store.set_clock(body.mode, body.speed, body.set_to)
     asyncio.create_task(event_hub.publish("clock.changed", result))
+    for name, data in notify_wiring.run_due_timers(store, lambda eid: store.get_evaluation(eid)["result"]):
+        asyncio.create_task(event_hub.publish(name, data))
     return result
 
 
@@ -421,8 +424,7 @@ def package_preview(evaluation_id: str, request: Request, posture: str | None = 
         raise_contract_error(404, "not_found", "Unknown evaluation", {"evaluation_id": evaluation_id})
     if posture is not None and posture not in POSTURES:
         raise_contract_error(422, "invalid_posture", "Override posture is not one of the five allowed values", {"posture": posture})
-    result = preview_response(record["result"], posture)
-    return result
+    return notify_wiring.preview(store, record, get_facility(record["facility_id"]), posture)
 
 
 def _stale_check(store: Store, evaluation_id: str, facility_id: str):
@@ -451,21 +453,9 @@ def _approval_response(approval: dict, notification: dict | None, timezone_name:
 
 
 def _create_notification(store: Store, evaluation: dict, approval: dict, final_posture: str) -> dict:
-    package = build_package(evaluation, final_posture)
-    notification = store.append_notification(
-        evaluation_id=evaluation["evaluation_id"], approval_id=approval["id"],
-        package=package, ack_deadline=evaluation.get("decision_deadline"),
-        next_update=(evaluation.get("parameters") or {}).get("next_update"),
-    )
-    # All channels are simulated until Suraj explicitly wires a real email provider.
-    for recipient in package["recipients"]:
-        if not recipient.get("included"):
-            continue
-        for channel in recipient.get("channel_plan", []):
-            store.append_delivery(notification_id=notification["id"],
-                                  recipient_id=recipient["employee_id"], channel=channel,
-                                  real=False, status="simulated")
-    return store.get_notification(notification["id"])
+    facility = get_facility(evaluation["facility_id"])
+    notification = notify_wiring.on_decision(store, evaluation, facility, approval, final_posture)
+    return {"id": notification["id"]} if notification else None
 
 
 @router.post("/evaluations/{evaluation_id}/approve")
@@ -509,6 +499,7 @@ async def reject_evaluation(evaluation_id: str, body: RejectRequest, request: Re
     approval = store.append_approval(evaluation_id=evaluation_id, action="reject",
                                      final_posture=record["result"]["posture"], actor=body.actor,
                                      reason=body.reason.strip())
+    notify_wiring.on_decision(store, record["result"], get_facility(record["facility_id"]), approval, None)
     await event_hub.publish("approval.recorded", {"evaluation_id": evaluation_id,
                               "action": "reject", "final_posture": approval["final_posture"]})
     return _approval_response(approval, None, get_facility(record["facility_id"])["location"]["timezone"])
@@ -556,6 +547,7 @@ def get_notification(notification_id: str, request: Request):
             "channel": delivery["channel"], "real": delivery["real"],
             "status": delivery["status"], "status_at_wall": _local_iso(delivery["status_at_wall"], timezone_name),
         })
+    record["escalation"] = notify_wiring.escalation_for(store_from_request(request), record["evaluation_id"], timezone_name)
     return {
         "notification_id": record["id"], "evaluation_id": record["evaluation_id"],
         "approval_id": record["approval_id"], "standing_policy": record["standing_policy"],

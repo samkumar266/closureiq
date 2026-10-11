@@ -68,8 +68,9 @@ CREATE TABLE IF NOT EXISTS approvals (
 );
 CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,
-    evaluation_id TEXT NOT NULL UNIQUE REFERENCES evaluations(id),
+    evaluation_id TEXT NOT NULL REFERENCES evaluations(id),
     approval_id TEXT REFERENCES approvals(id),
+    idempotency_key TEXT NOT NULL UNIQUE,
     standing_policy TEXT,
     package_json TEXT NOT NULL,
     ack_deadline TEXT,

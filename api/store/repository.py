@@ -267,22 +267,6 @@ class Store:
             row = con.execute("SELECT * FROM approvals WHERE evaluation_id=?", (evaluation_id,)).fetchone()
         return dict(row) if row else None
 
-    def append_notification(self, *, evaluation_id: str, approval_id: str | None,
-                            package: dict, ack_deadline: str | None = None,
-                            next_update: str | None = None, standing_policy: str | None = None,
-                            preview: bool = False) -> dict:
-        notification_id = self._next_id("ntf")
-        wall = iso()
-        sim = self.clock_now_sim()
-        with self.db.connect() as con:
-            con.execute(
-                """INSERT INTO notifications
-                (id,evaluation_id,approval_id,standing_policy,package_json,ack_deadline,next_update,preview,created_at_wall,created_at_sim)
-                VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                (notification_id, evaluation_id, approval_id, standing_policy, _json_dump(package),
-                 ack_deadline, next_update, int(preview), wall, sim),
-            )
-        return self.get_notification(notification_id)
 
     def get_notification(self, notification_id: str) -> dict | None:
         with self.db.connect() as con:
@@ -301,29 +285,7 @@ class Store:
             row = con.execute("SELECT id FROM notifications WHERE evaluation_id=? ORDER BY rowid DESC LIMIT 1", (evaluation_id,)).fetchone()
         return self.get_notification(row["id"]) if row else None
 
-    def append_delivery(self, *, notification_id: str, recipient_id: str, channel: str,
-                        real: bool = False, status: str = "simulated", provider_ref: str | None = None) -> dict:
-        delivery_id = self._next_id("dlv")
-        wall = iso()
-        sim = self.clock_now_sim()
-        with self.db.connect() as con:
-            con.execute(
-                "INSERT INTO deliveries(id,notification_id,recipient_id,channel,real,provider_ref,created_at_wall,created_at_sim) VALUES(?,?,?,?,?,?,?,?)",
-                (delivery_id, notification_id, recipient_id, channel, int(real), provider_ref, wall, sim),
-            )
-        self.append_delivery_status(delivery_id, status)
-        return self.get_delivery(delivery_id)
 
-    def append_delivery_status(self, delivery_id: str, status: str) -> dict:
-        event_id = self._next_id("dse")
-        wall = iso()
-        sim = self.clock_now_sim()
-        with self.db.connect() as con:
-            con.execute(
-                "INSERT INTO delivery_status_history(event_id,delivery_id,status,status_at_wall,status_at_sim) VALUES(?,?,?,?,?)",
-                (event_id, delivery_id, status, wall, sim),
-            )
-        return self.get_delivery(delivery_id)
 
     def get_delivery(self, delivery_id: str) -> dict | None:
         with self.db.connect() as con:
@@ -401,3 +363,92 @@ class Store:
 
     def all_evidence_for_facility(self, facility_id: str) -> list[dict]:
         return self.all_success_snapshots(facility_id)
+
+    def append_notification(self, *, evaluation_id: str, approval_id: str | None,
+                            package: dict, ack_deadline: str | None = None,
+                            next_update: str | None = None, standing_policy: str | None = None,
+                            preview: bool = False, notification_id: str | None = None,
+                            idempotency_key: str | None = None) -> dict:
+        notification_id = notification_id or self._next_id("ntf")
+        idempotency_key = idempotency_key or f"{evaluation_id}:{standing_policy or 'approval'}"
+        wall = iso()
+        sim = self.clock_now_sim()
+        with self.db.connect() as con:
+            con.execute(
+                """INSERT INTO notifications
+                (id,evaluation_id,approval_id,standing_policy,package_json,ack_deadline,next_update,preview,created_at_wall,created_at_sim,idempotency_key)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (notification_id, evaluation_id, approval_id, standing_policy, _json_dump(package),
+                 ack_deadline, next_update, int(preview), wall, sim, idempotency_key),
+            )
+        return self.get_notification(notification_id)
+
+    def append_delivery(self, *, notification_id: str, recipient_id: str, channel: str,
+                        real: bool = False, status: str = "simulated", provider_ref: str | None = None,
+                        delivery_id: str | None = None, at_sim: str | None = None) -> dict:
+        delivery_id = delivery_id or self._next_id("dlv")
+        wall = iso()
+        sim = at_sim or self.clock_now_sim()
+        with self.db.connect() as con:
+            con.execute(
+                "INSERT INTO deliveries(id,notification_id,recipient_id,channel,real,provider_ref,created_at_wall,created_at_sim) VALUES(?,?,?,?,?,?,?,?)",
+                (delivery_id, notification_id, recipient_id, channel, int(real), provider_ref, wall, sim),
+            )
+        self.append_delivery_status(delivery_id, status, at_sim=at_sim)
+        return self.get_delivery(delivery_id)
+
+    def append_delivery_status(self, delivery_id: str, status: str, at_sim: str | None = None) -> dict:
+        event_id = self._next_id("dse")
+        wall = iso()
+        sim = at_sim or self.clock_now_sim()
+        with self.db.connect() as con:
+            con.execute(
+                "INSERT INTO delivery_status_history(event_id,delivery_id,status,status_at_wall,status_at_sim) VALUES(?,?,?,?,?)",
+                (event_id, delivery_id, status, wall, sim),
+            )
+        return self.get_delivery(delivery_id)
+
+    # ---- notify integration (pasted from api/notify/INTEGRATION.md) ----
+
+    def get_notification_by_key(self, idempotency_key: str) -> dict | None:
+        with self.db.connect() as con:
+            row = con.execute("SELECT id FROM notifications WHERE idempotency_key=?", (idempotency_key,)).fetchone()
+        return self.get_notification(row["id"]) if row else None
+
+    def append_timer(self, row: dict) -> None:
+        """Insert one timer row built by api/notify (it already has its id and due_at_sim)."""
+        with self.db.connect() as con:
+            con.execute(
+                """INSERT INTO timers(id,kind,due_at_sim,payload_json,fired_at_sim,cancelled_at_sim,created_at_wall,created_at_sim)
+                VALUES(?,?,?,?,?,?,?,?)""",
+                (row["id"], row["kind"], row["due_at_sim"], _json_dump(row["payload"]), row.get("fired_at_sim"),
+                 row.get("cancelled_at_sim"), iso(), row.get("created_at_sim") or self.clock_now_sim()),
+            )
+
+    @staticmethod
+    def _timer_row(row) -> dict:
+        record = dict(row)
+        record["payload"] = _json_load(record.pop("payload_json"), {})
+        return record
+
+    def list_timers(self, evaluation_id: str | None = None, pending_only: bool = False) -> list[dict]:
+        sql = "SELECT * FROM timers"
+        if pending_only:
+            sql += " WHERE fired_at_sim IS NULL AND cancelled_at_sim IS NULL"
+        with self.db.connect() as con:
+            rows = [self._timer_row(r) for r in con.execute(sql + " ORDER BY rowid").fetchall()]
+        if evaluation_id:
+            rows = [r for r in rows if r["payload"].get("evaluation_id") == evaluation_id]
+        return rows
+
+    def mark_timer_fired(self, timer_id: str, at_sim: str) -> None:
+        """The one allowed update: fired_at_sim is set once, plus an audit row."""
+        with self.db.connect() as con:
+            con.execute("UPDATE timers SET fired_at_sim=? WHERE id=? AND fired_at_sim IS NULL", (at_sim, timer_id))
+        self.append_audit("timer.fired", {"timer_id": timer_id, "at_sim": at_sim})
+
+    def mark_timer_cancelled(self, timer_id: str, at_sim: str) -> None:
+        with self.db.connect() as con:
+            con.execute("UPDATE timers SET cancelled_at_sim=? WHERE id=? AND cancelled_at_sim IS NULL AND fired_at_sim IS NULL",
+                        (at_sim, timer_id))
+        self.append_audit("timer.cancelled", {"timer_id": timer_id, "at_sim": at_sim})
