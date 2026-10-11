@@ -140,14 +140,162 @@ def build_chat_agent(
     )
 
 
-BACKEND_PROMPT = SYSTEM_PROMPT + (
-    " Answer in plain sentences, at most 150 words. Quote every number exactly as a tool "
-    "returned it, with its unit. Write times as local clock times such as 11:24 PM and never "
-    "copy raw ISO timestamps. Name a threshold id (T1, T4, ...) only if it appears in the "
-    "evaluation's thresholds_crossed or thresholds_not_crossed. For a what-if question, call run_what_if: overrides map an "
-    "input id to a new value; for the forecast grid input pass a dict of field to number, "
-    "for example {\"in_2\": {\"windGust\": 65}} (mph), then say the result is hypothetical."
+BACKEND_RULES = (
+    " Rules for every answer: one short paragraph, at most 120 words, no repetition; write nothing before a tool call. "
+    "Quote every number exactly as a tool returned it, always followed by its unit (mph, in, ft, min); "
+    "write counts in words (four employees), never as digits, and never use the words first, second, third, fourth or fifth. Write times as local clock times such "
+    "as 11:24 PM, copied from the *_local fields (never convert time zones yourself); never copy raw ISO timestamps. Name a threshold id (T1, T4, ...) only if it appears "
+    "in thresholds_crossed or thresholds_not_crossed. "
+    "For questions about the recommendation, evidence, thresholds or missing data: call get_evaluation "
+    "once and answer from it. For questions about employees: call list_affected_employees once "
+    "(filter 'cannot_telework', 'essential', a group name, or none). "
+    "For a what-if question: call run_what_if exactly once, make no other tool call, then answer and "
+    "start the answer with 'HYPOTHETICAL:'. Overrides map an input id to a dict of new values: "
+    "forecast grid fields as numbers, e.g. {\"in_2\": {\"windGust\": 65}} (mph); the alerts input takes "
+    "event, severity, certainty or tier, e.g. {\"in_1\": {\"severity\": \"Severe\"}}. If the result has "
+    "assumed_alert, say that an example warning was assumed."
 )
+
+
+def backend_prompt(evaluation: dict[str, Any]) -> str:
+    """System prompt plus this evaluation's input ids, so a what-if needs no extra lookup."""
+    inputs = ", ".join(f"{i.get('id')} = {i.get('source')}" for i in evaluation.get("inputs", []))
+    return (SYSTEM_PROMPT + BACKEND_RULES
+            + f" Current evaluation: {evaluation.get('evaluation_id')}. Inputs: {inputs or 'none'}.")
+
+
+def _clock(value: Any, reference: Any) -> str | None:
+    """'2026-10-11T04:45:00-05:00' -> 'Sun 4:45 AM', in the evaluation's own offset
+    (taken from evaluated_at), so the model never converts time zones itself."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        ref = datetime.fromisoformat(str(reference).replace("Z", "+00:00")) if reference else None
+    except ValueError:
+        return None
+    if parsed.tzinfo and ref is not None and ref.tzinfo:
+        parsed = parsed.astimezone(ref.tzinfo)
+    # Weekday + clock only: a bare day number ("Oct 10 through") reads as a number
+    # with an unknown unit and would fail the validator.
+    return f"{parsed:%a} {parsed:%I:%M %p}".replace(" 0", " ")
+
+
+def _add_clocks(row: dict[str, Any], keys: tuple[str, ...], reference: Any) -> dict[str, Any]:
+    for key in keys:
+        local = _clock(row.get(key), reference)
+        if local:
+            row[f"{key}_local"] = local
+    return row
+
+
+def _with_unit(value: Any, unit: str) -> Any:
+    return {"value": value, "unit": unit} if isinstance(value, (int, float)) else value
+
+
+def _threshold_rows(rows: list[dict[str, Any]], keys: tuple[str, ...]) -> list[dict[str, Any]]:
+    return [{k: row.get(k) for k in keys if k in row} for row in rows or [] if isinstance(row, dict)]
+
+
+def _input_summary(item: dict[str, Any]) -> dict[str, Any]:
+    """One input without its raw blob: alerts as a short list, grid fields as their maximum."""
+    out = {k: item.get(k) for k in ("id", "role", "source", "label", "fetched_at", "snapshot_id", "stale")}
+    value = item.get("value")
+    if item.get("source") == "NWS alerts":
+        out["alerts"] = [{k: a.get(k) for k in ("event", "severity", "certainty", "tier")}
+                         for a in (value or [])[:5] if isinstance(a, dict)]
+        out["onset"], out["ends"] = item.get("onset"), item.get("ends")
+        _add_clocks(out, ("onset", "ends"), item.get("fetched_at"))
+    elif item.get("source") == "NWS forecast grid" and isinstance(value, dict):
+        peaks = {}
+        for field, periods in value.items():
+            numeric = [p for p in periods or [] if isinstance(p, dict) and isinstance(p.get("value"), (int, float))]
+            if numeric:
+                top = max(numeric, key=lambda p: p["value"])
+                peaks[field] = {"max": top["value"], "unit": top.get("unit"), "valid_time": top.get("valid_time")}
+        out["forecast_peaks"] = peaks
+    elif item.get("source") == "USGS gauge" and isinstance(value, dict):
+        out["readings"] = {name: {k: r.get(k) for k in ("value", "unit", "observed_at")}
+                           for name, r in value.items() if isinstance(r, dict) and "value" in r}
+    elif item.get("source") == "NWS flood categories" and isinstance(value, dict):
+        categories = ((value.get("flood") or {}).get("categories") or {})
+        out["gauge_name"] = value.get("name")
+        out["flood_stages"] = {name: {"value": c.get("stage"), "unit": "ft"}
+                               for name, c in categories.items() if isinstance(c, dict)}
+    elif isinstance(value, (int, float)):
+        out["value"] = value
+        if item.get("unit"):
+            out["unit"] = item["unit"]
+    elif isinstance(value, list):
+        out["periods"] = len(value)
+    return out
+
+
+def summarize_evaluation(result: dict[str, Any]) -> dict[str, Any]:
+    """What get_evaluation shows the model: every decision value, no raw evidence blobs."""
+    missing = [{"source": m.get("source"), "reason": m.get("reason"),
+                "last_good_snapshot_id": m.get("last_good_snapshot_id"),
+                "last_good_age": _with_unit(m.get("last_good_age_minutes"), "min"),
+                "max_age": _with_unit(m.get("max_age_minutes"), "min")}
+               for m in result.get("missing_evidence") or [] if isinstance(m, dict)]
+    summary = {
+        "evaluation_id": result.get("evaluation_id"),
+        "facility_id": result.get("facility_id"),
+        "evaluated_at": result.get("evaluated_at"),
+        "posture": result.get("posture"),
+        "raw_posture": result.get("raw_posture"),
+        "held_by_hysteresis": result.get("held_by_hysteresis"),
+        "confidence": result.get("confidence"),
+        "headline": result.get("headline"),
+        "rationale": result.get("rationale"),
+        "safety_instruction": result.get("safety_instruction"),
+        "decision_deadline": result.get("decision_deadline"),
+        "parameters": result.get("parameters"),
+        "thresholds_crossed": _threshold_rows(result.get("thresholds_crossed"),
+                                              ("id", "input_id", "cutoff", "actual", "unit", "margin")),
+        "thresholds_not_crossed": _threshold_rows(result.get("thresholds_not_crossed"),
+                                                  ("id", "input_id", "cutoff", "actual", "unit", "distance")),
+        "what_would_change": result.get("flip_list") or [],
+        "missing_evidence": missing,
+        "inputs": [_input_summary(i) for i in result.get("inputs") or [] if isinstance(i, dict)],
+    }
+    ref = result.get("evaluated_at")
+    _add_clocks(summary, ("evaluated_at", "decision_deadline"), ref)
+    if isinstance(summary.get("parameters"), dict):
+        summary["parameters"] = _add_clocks(dict(summary["parameters"]), tuple(summary["parameters"]), ref)
+    return summary
+
+
+def summarize_whatif(out: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+    """What run_what_if shows the model: the hypothetical decision and its thresholds."""
+    result = out.get("result") or {}
+    summary = {
+        "hypothetical": True,
+        "whatif_id": out.get("whatif_id"),
+        "evaluation_id": out.get("whatif_id"),  # agent_stream reads the what-if id from here too
+        "based_on": out.get("based_on"),
+        "overrides": out.get("overrides"),
+        "current_posture": base.get("posture"),
+        "hypothetical_posture": result.get("posture"),
+        "posture_changed": result.get("posture") != base.get("posture"),
+        "confidence": (result.get("confidence") or {}).get("level"),
+        "safety_instruction": result.get("safety_instruction"),
+        "decision_deadline": result.get("decision_deadline"),
+        "thresholds_crossed": _threshold_rows(result.get("thresholds_crossed"),
+                                              ("id", "input_id", "cutoff", "actual", "unit", "margin")),
+        "thresholds_not_crossed": _threshold_rows(result.get("thresholds_not_crossed"),
+                                                  ("id", "input_id", "cutoff", "actual", "unit", "distance")),
+        "changed_fields": out.get("changed_fields"),
+    }
+    ref = result.get("evaluated_at") or base.get("evaluated_at")
+    _add_clocks(summary, ("decision_deadline",), ref)
+    if result.get("assumed_alert"):
+        a = result["assumed_alert"]
+        summary["assumed_alert"] = _add_clocks({k: a.get(k) for k in ("event", "severity", "certainty", "tier",
+                                                                       "onset", "ends")}, ("onset", "ends"), ref)
+    return summary
+
+
 MAX_LIST_ITEMS = 12
 MAX_STRING_CHARS = 600
 MAX_RESULT_CHARS = 12000
@@ -167,6 +315,16 @@ def compact_for_model(value: Any) -> Any:
     if isinstance(value, str) and len(value) > MAX_STRING_CHARS:
         return value[:MAX_STRING_CHARS] + " [truncated]"
     return value
+
+
+def _bounded_roster(value: Any) -> Any:
+    """Roster rows are small; keep up to 60 people instead of the generic 12-item cut."""
+    import json as _json
+
+    if isinstance(value, dict) and isinstance(value.get("employees"), list) and len(value["employees"]) <= 60:
+        if len(_json.dumps(value, default=str)) <= MAX_RESULT_CHARS:
+            return value
+    return _bounded(value)
 
 
 def _bounded(value: Any) -> Any:
@@ -197,7 +355,7 @@ def build_backend_chat_agent(evaluation: dict[str, Any], backend: Any) -> Agent:
     def get_evaluation(evaluation_id: str) -> dict[str, Any]:
         """Read the stored evaluation when its ID matches the current chat."""
         _same(evaluation_id)
-        return _alert_safe(_bounded(deepcopy(evaluation)))
+        return _alert_safe(_bounded(summarize_evaluation(deepcopy(evaluation))))
 
     @tool
     def get_evidence(snapshot_id: str) -> dict[str, Any]:
@@ -208,9 +366,9 @@ def build_backend_chat_agent(evaluation: dict[str, Any], backend: Any) -> Agent:
     def list_affected_employees(
         evaluation_id: str, filter: str | None = None
     ) -> list[dict[str, Any]]:
-        """Read roster rows (group, telework eligibility) for the evaluation's facility."""
+        """Read the facility roster. filter: 'cannot_telework', 'essential', a group name, or none."""
         _same(evaluation_id)
-        return _bounded(backend.list_affected_employees(filter))
+        return _bounded_roster(backend.list_affected_employees(filter))
 
     @tool
     def get_thresholds() -> list[dict[str, Any]]:
@@ -221,12 +379,13 @@ def build_backend_chat_agent(evaluation: dict[str, Any], backend: Any) -> Agent:
     def run_what_if(evaluation_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
         """Run a hypothetical evaluation without changing stored records."""
         _same(evaluation_id)
-        return _alert_safe(_bounded(backend.run_what_if(deepcopy(overrides))))
+        out = backend.run_what_if(deepcopy(overrides))
+        return _alert_safe(_bounded(summarize_whatif({**out, "overrides": overrides}, evaluation)))
 
     return Agent(
         model=get_model(),
         tools=[get_evaluation, get_evidence, list_affected_employees, get_thresholds, run_what_if],
-        system_prompt=BACKEND_PROMPT,
+        system_prompt=backend_prompt(evaluation),
     )
 
 
