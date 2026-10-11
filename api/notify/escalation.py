@@ -36,6 +36,7 @@ LABELS = {
     "unacknowledged_to_supervisors": "Supervisors told who has not acknowledged",
     "shelter_notify_approver": "Approver told a shelter-in-place notice went out",
 }
+DELIVERY_KIND = "delivery_status"  # planned delivery status change (see simulator.delivery_timer_rows)
 APPROVAL_KINDS = {"manager_no_response_to_backup", "urgent_primary_and_backup",
                   "backup_silent_unresolved"}
 
@@ -125,6 +126,8 @@ def _unacked_action(timer: dict, ctx: dict) -> dict:
 def _fire_one(timer: dict, ctx: dict, next_id: Callable[[], str]) -> tuple[dict, list[dict]]:
     """Returns (action, follow_up_timers)."""
     p, kind, due = timer["payload"], timer["kind"], parse_iso(timer["due_at_sim"])
+    if kind == DELIVERY_KIND:
+        return {"timer_id": timer["id"], "kind": kind, "at_sim": timer["due_at_sim"], **p}, []
     action = {"timer_id": timer["id"], "kind": kind, "label": LABELS[kind],
               "at_sim": timer["due_at_sim"], "simulated": True, "mark_unresolved": False}
     follow = []
@@ -146,12 +149,16 @@ def _fire_one(timer: dict, ctx: dict, next_id: Callable[[], str]) -> tuple[dict,
 
 
 def fire_due(timers: list[dict], now_sim: datetime | str, ctx: dict,
-             next_id: Callable[[], str]) -> tuple[list[dict], list[dict], list[dict]]:
+             next_id: Callable[[], str],
+             on_fire: Callable[[dict, dict], None] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     """Fire every pending timer due at or before now_sim, in (due, id) order.
 
     ctx: {"evaluation": dict, "roster": list, "recipient_status_at": callable(at_sim) -> dict}
     Returns (fired_rows, new_rows, actions). Rows in `timers` are updated in place
     (fired_at_sim set once) and new follow-up rows are appended to `timers`.
+    on_fire(timer, action), if given, runs right after each firing, before the next
+    timer fires, so the app can write delivery statuses in order (an ack timer then
+    sees every delivery change that happened before it).
     """
     now = parse_iso(now_sim)
     fired, created, actions = [], [], []
@@ -167,17 +174,21 @@ def fire_due(timers: list[dict], now_sim: datetime | str, ctx: dict,
         fired.append(timer)
         created.extend(follow)
         actions.append(action)
+        if on_fire:
+            on_fire(timer, action)
 
 
 def next_due(timers: list[dict]) -> str | None:
-    pending = sorted(_pending(timers), key=lambda t: parse_iso(t["due_at_sim"]))
+    """Next escalation due time (for the escalation.fired SSE event's next_due_sim)."""
+    pending = sorted((t for t in _pending(timers) if t["kind"] in LABELS),
+                     key=lambda t: parse_iso(t["due_at_sim"]))
     return pending[0]["due_at_sim"] if pending else None
 
 
 def escalation_view(timers: list[dict], tz_name: str) -> list[dict]:
     """Contract `escalation[]`: {step, label, due_sim, fired_at_sim}. Cancelled timers hidden."""
     tz = ZoneInfo(tz_name)
-    rows = sorted((t for t in timers if t["cancelled_at_sim"] is None),
+    rows = sorted((t for t in timers if t["cancelled_at_sim"] is None and t["kind"] in LABELS),
                   key=lambda t: (parse_iso(t["due_at_sim"]), t["id"]))
     local = lambda v: parse_iso(v).astimezone(tz).isoformat() if v else None
     return [{"step": t["kind"], "label": LABELS[t["kind"]], "due_sim": local(t["due_at_sim"]),

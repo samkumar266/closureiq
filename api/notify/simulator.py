@@ -185,3 +185,47 @@ def simulate_responses(plan: dict, now_sim: datetime | str, rng: random.Random,
                 new.append(event)
                 acked_people.add(d["recipient_id"])
     return new
+
+
+def delivery_timer_rows(plan: dict, *, notification_id: str, evaluation_id: str,
+                        next_timer_id: Callable[[], str], created_sim: datetime | str) -> list[dict]:
+    """Turn planned events into timer rows (kind "delivery_status") for the timers table.
+
+    A "queued" row means: create the delivery row now. Every other row means:
+    append this status to the delivery's history, with status_at_sim = due_at_sim.
+    """
+    by_id = {d["delivery_id"]: d for d in plan["deliveries"]}
+    created = parse_iso(created_sim).isoformat()
+    rows = []
+    for e in plan["events"]:
+        d = by_id[e["delivery_id"]]
+        payload = {"notification_id": notification_id, "evaluation_id": evaluation_id,
+                   "delivery_id": d["delivery_id"], "recipient_id": d["recipient_id"],
+                   "channel": d["channel"], "real": d["real"], "attempt": d["attempt"],
+                   "provider_ref": d.get("provider_ref"), "status": e["status"]}
+        rows.append({"id": next_timer_id(), "kind": "delivery_status", "due_at_sim": e["at_sim"],
+                     "payload": payload, "fired_at_sim": None, "cancelled_at_sim": None,
+                     "created_at_sim": created})
+    return rows
+
+
+def recipient_status_from_deliveries(deliveries: list[dict]) -> dict[str, str]:
+    """Same answer as recipient_status(), from stored delivery rows
+    ({recipient_id, status}, as the store's list_deliveries returns them).
+    Failover rows only exist once queued, so 'unreachable' means every row so far failed
+    and no newer attempt was queued; the caller fires timers in order, so that is exact.
+    """
+    by_person: dict[str, list[str]] = {}
+    for d in deliveries:
+        by_person.setdefault(d["recipient_id"], []).append(d.get("status"))
+    out = {}
+    for person, states in by_person.items():
+        if "acknowledged" in states:
+            out[person] = "acknowledged"
+        elif "delivered" in states:
+            out[person] = "delivered"
+        elif states and all(s == "failed" for s in states):
+            out[person] = "unreachable"
+        else:
+            out[person] = "pending"
+    return out

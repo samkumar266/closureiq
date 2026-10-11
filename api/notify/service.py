@@ -17,7 +17,7 @@ from typing import Callable, MutableMapping
 from api.notify.escalation import schedule_ack_timer
 from api.notify.package import build_package
 from api.notify.recipients import POSTURE_LABEL
-from api.notify.simulator import mark_real_result, plan_deliveries
+from api.notify.simulator import delivery_timer_rows, mark_real_result, plan_deliveries
 from api.notify.standing_policy import STANDING_POLICY, shelter_timers
 
 _lock = threading.Lock()
@@ -97,11 +97,19 @@ def send_real_email(result: dict, profile: dict, send_email_fn: Callable[[str, s
 
 def notify(key: str, outbox: MutableMapping, evaluation: dict, profile: dict, roster: list[dict],
            *, send_email_fn: Callable[[str, str], dict], **kwargs) -> tuple[dict, bool]:
-    """create_notification + send_real_email, exactly once per key."""
+    """create_notification + send_real_email, exactly once per key.
+
+    After this, result["timers"] holds every row to insert into the timers table:
+    escalation timers plus one "delivery_status" row per planned status change.
+    """
     def build():
         return create_notification(evaluation, profile, roster, **kwargs)
 
     def send(result):
         send_real_email(result, profile, send_email_fn, kwargs["rng"], kwargs.get("storm", False),
                         kwargs.get("next_delivery_id"))
+        pkg = result["notification"]
+        result["timers"] += delivery_timer_rows(
+            result["plan"], notification_id=pkg["notification_id"], evaluation_id=pkg["evaluation_id"],
+            next_timer_id=kwargs["next_timer_id"], created_sim=kwargs["now_sim"])
     return notify_once(key, outbox, build, send)
