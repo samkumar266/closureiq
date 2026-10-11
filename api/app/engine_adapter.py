@@ -65,6 +65,28 @@ def _field_periods(grid_payload: dict, field_name: str) -> list[dict]:
     return values
 
 
+GRID_OVERRIDE_UNITS = {"windGust": "mph", "windSpeed": "mph", "iceAccumulation": "in",
+                       "snowfallAmount": "in", "temperature": "degF"}
+
+
+def _grid_override_periods(override: dict) -> dict:
+    """{"windGust": 65} -> {"windGust": [{"value": 65.0, "unit": "mph", "valid_time": "what-if"}]}."""
+    out = {}
+    for name, value in override.items():
+        if name in GRID_OVERRIDE_UNITS and isinstance(value, (int, float)):
+            out[name] = [{"value": float(value), "unit": GRID_OVERRIDE_UNITS[name], "valid_time": "what-if"}]
+    return out
+
+
+def _apply_grid_overrides(forecast_fields: dict, inputs: list[dict], overrides: dict | None) -> dict:
+    """What-if: an override of the grid input, e.g. {"in_2": {"windGust": 65}}, replaces
+    those fields before the T4-T6 checks, so the hypothetical result is re-evaluated."""
+    grid_input = next((i for i in inputs if i["source"] == "NWS forecast grid"), None)
+    if not overrides or not grid_input or not isinstance(overrides.get(grid_input["id"]), dict):
+        return forecast_fields
+    return {**forecast_fields, **_grid_override_periods(overrides[grid_input["id"]])}
+
+
 def _grid_summary(payload: dict) -> dict:
     names = ["windGust", "windSpeed", "iceAccumulation", "snowfallAmount", "temperature"]
     return {name: _field_periods(payload, name) for name in names if _field_periods(payload, name)}
@@ -186,6 +208,7 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
     # Find numeric wind/ice triggers in upcoming grid periods.
     forecast_snapshot = usable.get("NWS forecast grid")
     forecast_fields = _grid_summary(forecast_snapshot.get("raw_payload_json") or {}) if forecast_snapshot and forecast_snapshot.get("ok") else {}
+    forecast_fields = _apply_grid_overrides(forecast_fields, inputs, overrides)
     numeric_trigger = False
     threshold_crossed: list[dict] = []
     for field_name, threshold_id, cutoff, unit, hazard in [
@@ -354,10 +377,16 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
         for input_item in result["inputs"]:
             if input_item["id"] in overrides:
                 new_value = overrides[input_item["id"]]
-                input_item["value"] = new_value
+                if input_item["source"] == "NWS forecast grid" and isinstance(new_value, dict):
+                    # Show the overridden grid fields next to the untouched ones.
+                    input_item["value"] = {**(input_item["value"] or {}),
+                                           **_grid_override_periods(new_value)}
+                else:
+                    input_item["value"] = new_value
                 input_item["stale"] = False if new_value is not None else True
-        # Fallback doesn't run an independent hazard engine on modified source inputs; label this honestly.
-        result["rationale"] += " What-if input overrides were applied; final policy result requires the shared engine integration."
+        # Grid numbers (wind gust, sustained wind, ice) are re-checked against T4-T6 above;
+        # other overridden inputs are shown but do not re-run the alert logic.
+        result["rationale"] += f" What-if overrides applied to {', '.join(sorted(overrides))}."
     return result
 
 
