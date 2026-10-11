@@ -1,0 +1,533 @@
+{
+  "notification_id": "ntf_0003",
+  "evaluation_id": "eval_0051",
+  "approval_id": "apr_0006",
+  "standing_policy": null,
+  "preview": false,
+  "ack_deadline": "2026-10-15T21:01:00-05:00",
+  "next_update": "2026-10-16T02:00:00-05:00",
+  "package": {
+    "recipients": [
+      {
+        "employee_id": "e_001",
+        "included": true,
+        "group": "essential",
+        "reason": "Essential staff; reporting is unchanged during closure",
+        "message_id": "m_1",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_002",
+        "included": true,
+        "group": "essential",
+        "reason": "Essential staff; reporting is unchanged during closure",
+        "message_id": "m_1",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_003",
+        "included": true,
+        "group": "essential",
+        "reason": "Essential staff; reporting is unchanged during closure",
+        "message_id": "m_1",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_004",
+        "included": true,
+        "group": "essential",
+        "reason": "Essential staff; reporting is unchanged during closure",
+        "message_id": "m_2",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_005",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_3",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_006",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_4",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_007",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_3",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_008",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_3",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_009",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_3",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_010",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_5",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_011",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_3",
+        "channel_plan": [
+          "email"
+        ]
+      },
+      {
+        "employee_id": "e_012",
+        "included": true,
+        "group": "onsite_telework_eligible",
+        "reason": "Assigned onsite today and telework-eligible; posture is closure",
+        "message_id": "m_3",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_013",
+        "included": true,
+        "group": "onsite_not_telework_eligible",
+        "reason": "Assigned onsite today and not telework-eligible; posture is closure",
+        "message_id": "m_6",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_014",
+        "included": true,
+        "group": "onsite_not_telework_eligible",
+        "reason": "Assigned onsite today and not telework-eligible; posture is closure",
+        "message_id": "m_6",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_015",
+        "included": true,
+        "group": "onsite_not_telework_eligible",
+        "reason": "Assigned onsite today and not telework-eligible; posture is closure",
+        "message_id": "m_6",
+        "channel_plan": [
+          "voice",
+          "email"
+        ]
+      },
+      {
+        "employee_id": "e_016",
+        "included": true,
+        "group": "onsite_not_telework_eligible",
+        "reason": "Assigned onsite today and not telework-eligible; posture is closure",
+        "message_id": "m_7",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_017",
+        "included": true,
+        "group": "already_teleworking",
+        "reason": "Already teleworking; informational closure notice only",
+        "message_id": "m_8",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_018",
+        "included": true,
+        "group": "already_teleworking",
+        "reason": "Already teleworking; informational closure notice only",
+        "message_id": "m_8",
+        "channel_plan": [
+          "email",
+          "sms",
+          "push"
+        ]
+      },
+      {
+        "employee_id": "e_019",
+        "included": true,
+        "group": "already_teleworking",
+        "reason": "Already teleworking; informational closure notice only",
+        "message_id": "m_8",
+        "channel_plan": [
+          "email",
+          "sms"
+        ]
+      },
+      {
+        "employee_id": "e_020",
+        "included": false,
+        "group": "detail_elsewhere",
+        "reason": "On detail at another office today; not assigned to this site"
+      },
+      {
+        "employee_id": "e_021",
+        "included": false,
+        "group": "detail_elsewhere",
+        "reason": "On detail at another office today; not assigned to this site"
+      },
+      {
+        "employee_id": "e_022",
+        "included": false,
+        "group": "on_leave_or_off",
+        "reason": "On leave or off today; no action needed"
+      },
+      {
+        "employee_id": "e_023",
+        "included": false,
+        "group": "on_leave_or_off",
+        "reason": "On leave or off today; no action needed"
+      },
+      {
+        "employee_id": "e_024",
+        "included": true,
+        "group": "contractor",
+        "reason": "Contractor; told the site status, work status goes through the contract lead",
+        "message_id": "m_9",
+        "channel_plan": [
+          "email"
+        ]
+      },
+      {
+        "employee_id": "e_025",
+        "included": true,
+        "group": "contractor",
+        "reason": "Contractor; told the site status, work status goes through the contract lead",
+        "message_id": "m_9",
+        "channel_plan": [
+          "email"
+        ]
+      }
+    ],
+    "messages": [
+      {
+        "id": "m_1",
+        "group": "essential",
+        "text": "What is happening: Kansas City Service Center: Facility closed.\nDoes this apply to you: Yes. You are essential staff.\nWhat to do: Report as scheduled. Allow extra travel time and travel only if it is safe.\nEffective: From Fri Oct 16, 7:30 AM until Fri Oct 16, 4:00 PM.\nNext update: Fri Oct 16, 2:00 AM\nAcknowledge: Reply OK or press Acknowledge to confirm you received this message.\nIf no update arrives: Keep reporting as scheduled and follow your supervisor.",
+        "variant": "standard",
+        "needs_translation": false
+      },
+      {
+        "id": "m_2",
+        "group": "essential",
+        "text": "Qué está pasando: Kansas City Service Center: Instalación cerrada.\nLe aplica a usted: Sí. Usted es personal esencial.\nQué hacer: Preséntese según su horario. Calcule tiempo extra y viaje solo si es seguro.\nVigencia: Desde 16 oct, 07:30 hasta 16 oct, 16:00.\nPróxima actualización: 16 oct, 02:00\nConfirme la recepción: Responda OK o pulse Confirmar para indicar que recibió este mensaje.\nSi no llega ninguna actualización: Siga presentándose según su horario y siga las indicaciones de su supervisor.",
+        "variant": "spanish",
+        "needs_translation": false
+      },
+      {
+        "id": "m_3",
+        "group": "onsite_telework_eligible",
+        "text": "What is happening: Kansas City Service Center: Facility closed.\nDoes this apply to you: Yes. You are assigned onsite today.\nWhat to do: Do not report to the building. Telework or take leave per policy.\nEffective: From Fri Oct 16, 7:30 AM until Fri Oct 16, 4:00 PM.\nNext update: Fri Oct 16, 2:00 AM\nAcknowledge: Reply OK or press Acknowledge to confirm you received this message.\nIf no update arrives: Stay closed. Do not report until you receive a notice that the facility has reopened.",
+        "variant": "standard",
+        "needs_translation": false
+      },
+      {
+        "id": "m_4",
+        "group": "onsite_telework_eligible",
+        "text": "Qué está pasando: Kansas City Service Center: Instalación cerrada.\nLe aplica a usted: Sí. Usted tiene asignado trabajo presencial hoy.\nQué hacer: No se presente en el edificio. Haga teletrabajo o tome licencia según la política.\nVigencia: Desde 16 oct, 07:30 hasta 16 oct, 16:00.\nPróxima actualización: 16 oct, 02:00\nConfirme la recepción: Responda OK o pulse Confirmar para indicar que recibió este mensaje.\nSi no llega ninguna actualización: La instalación sigue cerrada. No se presente hasta recibir un aviso de reapertura.",
+        "variant": "spanish",
+        "needs_translation": false
+      },
+      {
+        "id": "m_5",
+        "group": "onsite_telework_eligible",
+        "text": "WHAT IS HAPPENING:\nKansas City Service Center: Facility closed.\n\nDOES THIS APPLY TO YOU:\nYes. You are assigned onsite today.\n\nWHAT TO DO:\nDo not report to the building. Telework or take leave per policy.\n\nEFFECTIVE:\nFrom Fri Oct 16, 7:30 AM until Fri Oct 16, 4:00 PM.\n\nNEXT UPDATE:\nFri Oct 16, 2:00 AM\n\nACKNOWLEDGE:\nReply OK or press Acknowledge to confirm you received this message.\n\nIF NO UPDATE ARRIVES:\nStay closed. Do not report until you receive a notice that the facility has reopened.",
+        "variant": "large_print",
+        "needs_translation": false
+      },
+      {
+        "id": "m_6",
+        "group": "onsite_not_telework_eligible",
+        "text": "What is happening: Kansas City Service Center: Facility closed.\nDoes this apply to you: Yes. You are assigned onsite today.\nWhat to do: Do not report to the building. Take leave per policy.\nEffective: From Fri Oct 16, 7:30 AM until Fri Oct 16, 4:00 PM.\nNext update: Fri Oct 16, 2:00 AM\nAcknowledge: Reply OK or press Acknowledge to confirm you received this message.\nIf no update arrives: Stay closed. Do not report until you receive a notice that the facility has reopened.",
+        "variant": "standard",
+        "needs_translation": false
+      },
+      {
+        "id": "m_7",
+        "group": "onsite_not_telework_eligible",
+        "text": "Qué está pasando: Kansas City Service Center: Instalación cerrada.\nLe aplica a usted: Sí. Usted tiene asignado trabajo presencial hoy.\nQué hacer: No se presente en el edificio. Tome licencia según la política.\nVigencia: Desde 16 oct, 07:30 hasta 16 oct, 16:00.\nPróxima actualización: 16 oct, 02:00\nConfirme la recepción: Responda OK o pulse Confirmar para indicar que recibió este mensaje.\nSi no llega ninguna actualización: La instalación sigue cerrada. No se presente hasta recibir un aviso de reapertura.",
+        "variant": "spanish",
+        "needs_translation": false
+      },
+      {
+        "id": "m_8",
+        "group": "already_teleworking",
+        "text": "What is happening: Kansas City Service Center: Facility closed.\nDoes this apply to you: For information only. You are already teleworking.\nWhat to do: Keep teleworking as planned. Do not come to the building.\nEffective: From Fri Oct 16, 7:30 AM until Fri Oct 16, 4:00 PM.\nNext update: Fri Oct 16, 2:00 AM\nAcknowledge: Reply OK or press Acknowledge to confirm you received this message.\nIf no update arrives: Keep teleworking and do not come to the building.",
+        "variant": "standard",
+        "needs_translation": false
+      },
+      {
+        "id": "m_9",
+        "group": "contractor",
+        "text": "What is happening: Kansas City Service Center: Facility closed.\nDoes this apply to you: Yes, as site status. Your work status goes through your contract lead.\nWhat to do: Contact your contract lead before coming on site.\nEffective: From Fri Oct 16, 7:30 AM until Fri Oct 16, 4:00 PM.\nNext update: Fri Oct 16, 2:00 AM\nAcknowledge: Reply OK or press Acknowledge to confirm you received this message.\nIf no update arrives: Check with your contract lead before coming on site.",
+        "variant": "standard",
+        "needs_translation": false
+      }
+    ],
+    "warnings": []
+  },
+  "deliveries": [
+    {
+      "delivery_id": "dlv_0001",
+      "recipient_id": "e_001",
+      "channel": "email",
+      "real": true,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0002",
+      "recipient_id": "e_002",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0003",
+      "recipient_id": "e_003",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0004",
+      "recipient_id": "e_004",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0005",
+      "recipient_id": "e_005",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0006",
+      "recipient_id": "e_006",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0007",
+      "recipient_id": "e_007",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0008",
+      "recipient_id": "e_008",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0009",
+      "recipient_id": "e_009",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0010",
+      "recipient_id": "e_010",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0011",
+      "recipient_id": "e_011",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0012",
+      "recipient_id": "e_012",
+      "channel": "email",
+      "real": false,
+      "status": "acknowledged",
+      "status_at_wall": "2026-10-15T20:44:00-05:00"
+    },
+    {
+      "delivery_id": "dlv_0013",
+      "recipient_id": "e_013",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:08-05:00"
+    },
+    {
+      "delivery_id": "dlv_0014",
+      "recipient_id": "e_014",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:09-05:00"
+    },
+    {
+      "delivery_id": "dlv_0015",
+      "recipient_id": "e_015",
+      "channel": "voice",
+      "real": false,
+      "status": "failed",
+      "status_at_wall": "2026-10-15T20:41:58-05:00"
+    },
+    {
+      "delivery_id": "dlv_0017",
+      "recipient_id": "e_016",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:29-05:00"
+    },
+    {
+      "delivery_id": "dlv_0018",
+      "recipient_id": "e_017",
+      "channel": "email",
+      "real": false,
+      "status": "failed",
+      "status_at_wall": "2026-10-15T20:41:29-05:00"
+    },
+    {
+      "delivery_id": "dlv_0020",
+      "recipient_id": "e_018",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:09-05:00"
+    },
+    {
+      "delivery_id": "dlv_0021",
+      "recipient_id": "e_019",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:30-05:00"
+    },
+    {
+      "delivery_id": "dlv_0022",
+      "recipient_id": "e_024",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:24-05:00"
+    },
+    {
+      "delivery_id": "dlv_0023",
+      "recipient_id": "e_025",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:12-05:00"
+    },
+    {
+      "delivery_id": "dlv_0019",
+      "recipient_id": "e_017",
+      "channel": "sms",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:41:37-05:00"
+    },
+    {
+      "delivery_id": "dlv_0016",
+      "recipient_id": "e_015",
+      "channel": "email",
+      "real": false,
+      "status": "delivered",
+      "status_at_wall": "2026-10-15T20:42:26-05:00"
+    }
+  ],
+  "escalation": [
+    {
+      "step": "unacknowledged_to_supervisors",
+      "label": "Supervisors told who has not acknowledged",
+      "due_sim": "2026-10-15T21:01:00-05:00",
+      "fired_at_sim": "2026-10-15T21:01:00-05:00"
+    }
+  ]
+}
