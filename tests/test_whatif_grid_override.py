@@ -30,3 +30,17 @@ def test_gust_override_crosses_t4():
     gust = next(i for i in what_if["inputs"] if i["id"] == grid_id)["value"]["windGust"]
     assert gust == [{"value": 65.0, "unit": "mph", "valid_time": "what-if"}]
     assert f"What-if overrides applied to {grid_id}." in what_if["rationale"]
+
+
+def test_severity_override_with_no_alert_assumes_a_stated_warning():
+    facility = get_facility("kc-service-center")
+    snaps = [_snap("NWS alerts", {"features": []}, "snap_1"), _snap("NWS forecast grid", _grid(30.0), "snap_2")]
+    base = fallback_evaluate(None, facility, snaps, evaluated_at=NOW)
+    alerts_id = next(i["id"] for i in base["inputs"] if i["source"] == "NWS alerts")
+    what_if = fallback_evaluate(None, facility, snaps, evaluated_at=NOW, overrides={alerts_id: {"severity": "Severe"}},
+                                hypothetical=True)
+    assumed = what_if["assumed_alert"]
+    assert assumed["severity"] == "Severe" and assumed["tier"] == "warning" and assumed["certainty"] == "Likely"
+    alerts = next(i for i in what_if["inputs"] if i["id"] == alerts_id)
+    assert alerts["value"][0]["severity"] == "Severe" and alerts["role"] == "drove"
+    assert "assumed_alert" not in base

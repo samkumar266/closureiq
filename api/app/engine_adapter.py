@@ -78,6 +78,36 @@ def _grid_override_periods(override: dict) -> dict:
     return out
 
 
+ALERT_OVERRIDE_KEYS = ("event", "severity", "certainty", "urgency", "tier", "onset", "ends")
+ASSUMED_ALERT_HOURS = 6
+
+
+def _apply_alert_override(active_alerts: list[dict], inputs: list[dict], overrides: dict | None,
+                          now: datetime) -> tuple[list[dict], dict | None]:
+    """What-if on the alerts input, e.g. {"in_1": {"severity": "Severe"}}.
+
+    With an active alert, the strongest one is changed. With none, an example
+    Warning is assumed (certainty Likely, starting now, lasting 6 hours) and
+    returned so the result can say exactly what was assumed.
+    """
+    alert_input = next((i for i in inputs if i["source"] == "NWS alerts"), None)
+    override = (overrides or {}).get(alert_input["id"]) if alert_input else None
+    if not isinstance(override, dict):
+        return active_alerts, None
+    changes = {k: override[k] for k in ALERT_OVERRIDE_KEYS if k in override}
+    if active_alerts:
+        rank = {"none": 0, "advisory": 1, "watch": 2, "warning": 3}
+        target = max(active_alerts, key=lambda a: rank.get(a.get("tier"), 0))
+        updated = [dict(a, **changes) if a is target else a for a in active_alerts]
+        return updated, None
+    assumed = {"id": "what-if", "event": "Severe Thunderstorm Warning", "headline": "What-if alert (assumed)",
+               "severity": "Severe", "certainty": "Likely", "urgency": "Expected", "tier": "warning",
+               "hazard": "thunderstorm and wind", "onset": now.isoformat(),
+               "ends": (now + timedelta(hours=ASSUMED_ALERT_HOURS)).isoformat()}
+    assumed.update(changes)
+    return [assumed], assumed
+
+
 def _apply_grid_overrides(forecast_fields: dict, inputs: list[dict], overrides: dict | None) -> dict:
     """What-if: an override of the grid input, e.g. {"in_2": {"windGust": 65}}, replaces
     those fields before the T4-T6 checks, so the hypothetical result is re-evaluated."""
@@ -227,6 +257,7 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
                     "cutoff": cutoff, "actual": max_item["value"], "unit": unit,
                     "margin": round(max_item["value"] - cutoff, 3), "anchor": "MVP threshold; confirm local NWS criteria", "anchor_url": None})
 
+    active_alerts, assumed_alert = _apply_alert_override(active_alerts, inputs, overrides, now)
     strongest = max(active_alerts, key=lambda a: (
         {"none": 0, "advisory": 1, "watch": 2, "warning": 3}.get(a.get("tier"), 0),
         SEVERITY_RANK.get(str(a.get("severity") or "unknown").lower(), 0)), default=None)
@@ -377,7 +408,13 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
         for input_item in result["inputs"]:
             if input_item["id"] in overrides:
                 new_value = overrides[input_item["id"]]
-                if input_item["source"] == "NWS forecast grid" and isinstance(new_value, dict):
+                if input_item["source"] == "NWS alerts" and isinstance(new_value, dict):
+                    input_item["value"] = [{k: a.get(k) for k in ("id", "event", "headline", "severity", "certainty",
+                                                                   "urgency", "tier", "hazard")} for a in active_alerts]
+                    input_item["onset"] = min((a["onset"] for a in active_alerts if a.get("onset")), default=None)
+                    input_item["ends"] = max((a["ends"] for a in active_alerts if a.get("ends")), default=None)
+                    input_item["role"] = "drove" if active_alerts else "context"
+                elif input_item["source"] == "NWS forecast grid" and isinstance(new_value, dict):
                     # Show the overridden grid fields next to the untouched ones.
                     input_item["value"] = {**(input_item["value"] or {}),
                                            **_grid_override_periods(new_value)}
@@ -387,6 +424,8 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
         # Grid numbers (wind gust, sustained wind, ice) are re-checked against T4-T6 above;
         # other overridden inputs are shown but do not re-run the alert logic.
         result["rationale"] += f" What-if overrides applied to {', '.join(sorted(overrides))}."
+        if assumed_alert:
+            result["assumed_alert"] = assumed_alert
     return result
 
 
