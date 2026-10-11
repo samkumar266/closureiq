@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ai.chat import build_chat_agent, stream_agent_events
 from ai.validator import validate
 from ..engine import Recommendation, run_what_if
-from ..store import SQLiteStore
+from ..legacy_store import SQLiteStore
 
 
 class WhatIfRequest(BaseModel):

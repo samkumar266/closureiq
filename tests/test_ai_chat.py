@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from ai.chat import build_chat_agent, stream_agent_events, validate_answer
 from api.app.main import create_app
 from api.engine import FacilityPolicy, InputEvidence, Recommendation
-from api.store import SQLiteStore
+from api.legacy_store import SQLiteStore
 
 
 def _facility() -> FacilityPolicy:
