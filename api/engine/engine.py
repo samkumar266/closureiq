@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+from copy import deepcopy
 from typing import Any
 
 import yaml
@@ -24,6 +25,11 @@ POLICY_PATH = Path(__file__).with_name("policy.yaml")
 _POLICY: dict[str, Any] = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
 POSTURES = tuple(_POLICY["postures"])
 _RANK = {posture: index for index, posture in enumerate(POSTURES)}
+
+
+def policy_thresholds() -> list[dict[str, Any]]:
+    """Return the configured thresholds and their source anchors."""
+    return deepcopy(_POLICY["thresholds"])
 
 
 def evaluate(
