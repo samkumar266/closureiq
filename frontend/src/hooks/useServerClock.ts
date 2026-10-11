@@ -21,6 +21,12 @@ function simNow(anchor: ClockAnchor) {
   return anchor.simMs + (Date.now() - anchor.wallMs) * anchor.speed
 }
 
+export const CLOCK_REFRESH_EVENT = 'closureiq:clock-refresh'
+
+export function requestClockRefresh() {
+  window.dispatchEvent(new Event(CLOCK_REFRESH_EVENT))
+}
+
 // Deadlines and escalation run on the simulated clock (architecture: "Two clocks").
 // Falls back to the browser clock when the API is not running.
 export function useServerClock() {
@@ -36,12 +42,19 @@ export function useServerClock() {
   }
 
   useEffect(() => {
-    apiGet<ClockResponse>('/clock')
-      .then(applyClock)
-      .catch(() => console.warn('Clock API unavailable; using browser time'))
-    apiGet<HealthResponse>('/health')
-      .then((health) => setDataMode(health.data_mode))
-      .catch(() => console.warn('Health API unavailable'))
+    const refresh = () => {
+      apiGet<ClockResponse>('/clock')
+        .then(applyClock)
+        .catch(() => console.warn('Clock API unavailable; using browser time'))
+      apiGet<HealthResponse>('/health')
+        .then((health) => setDataMode(health.data_mode))
+        .catch(() => console.warn('Health API unavailable'))
+    }
+    refresh()
+    // Demo controls fire this after changing the clock or mode, so every screen re-reads them even if
+    // the backend's clock.changed event does not arrive.
+    window.addEventListener(CLOCK_REFRESH_EVENT, refresh)
+    return () => window.removeEventListener(CLOCK_REFRESH_EVENT, refresh)
   }, [])
 
   useEffect(() => {

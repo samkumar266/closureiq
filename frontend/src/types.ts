@@ -102,6 +102,8 @@ export type Facility = {
     timezone: string
   }
   highest_alert_tier: AlertTier
+  // Optional, not yet sent by the backend: the alert behind highest_alert_tier, for the Watchlist card.
+  top_alert?: { event: string; severity: string | null; certainty: string | null } | null
   source_health: SourceHealth
   data_mode: DataMode
   // null until the backend has evaluated the facility for the first time.
@@ -134,6 +136,7 @@ export type Approval = {
   actor: string
   reason: string | null
   acted_at_wall: string
+  acted_at_sim?: string
 }
 
 export type FacilityStatus = {
@@ -167,7 +170,8 @@ export type Employee = {
   essential: boolean
   telework_eligible: boolean
   commute_county: string
-  channels: { type: ChannelType; address: string }[]
+  // Contract: objects. The backend roster currently sends plain channel names.
+  channels: ({ type: ChannelType; address: string } | string)[]
   comm_needs: string[]
   supervisor_id: string | null
 }
@@ -180,7 +184,8 @@ export type ApprovalResponse = {
 export type PackageRecipient = {
   employee_id: string
   included: boolean
-  group: EmployeeGroup
+  // string, not EmployeeGroup: the backend also sends detail_in.
+  group: string
   reason: string
   message_id?: string
   channel_plan?: ChannelType[]
@@ -215,7 +220,7 @@ export type NotificationPackage = {
   next_update: string | null
   package: {
     recipients: PackageRecipient[]
-    messages: { id: string; group: EmployeeGroup; text: string }[]
+    messages: { id: string; group: string; text: string }[]
   }
   deliveries: Delivery[]
   escalation: EscalationStep[]
@@ -246,9 +251,11 @@ export type DecisionRecord = {
     http_status: number | null
     ok: boolean
     raw_payload: unknown
+    error?: string | null
   }[]
   approval: Approval | null
-  notification: NotificationPackage | null
+  // Inside the record the backend names the id field `id` rather than `notification_id`.
+  notification: (Partial<NotificationPackage> & { id?: string; created_at_wall?: string }) | null
   deliveries: (Delivery & { status_history: { status: DeliveryStatus; at_wall: string; at_sim: string }[] })[]
   timers: Record<string, unknown>[]
   audit_log: Record<string, unknown>[]
