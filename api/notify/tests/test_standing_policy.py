@@ -51,3 +51,22 @@ def test_shelter_send_tells_approver_and_is_idempotent(closure_eval, kc_profile,
     assert result["timers"][0]["due_at_sim"] == "2026-10-16T13:00:00-05:00"
     # a later human approval of the same evaluation is a different key
     assert idempotency_key(ev["evaluation_id"]) not in outbox
+
+
+def test_generic_shelter_advice_does_not_auto_send(closure_eval):
+    # Real engine text seen live on a Flash Flood Warning (Aiken SC, 2026-10-10).
+    ev = dict(closure_eval, safety_instruction="Follow official NWS instructions; seek appropriate shelter if directed.")
+    assert not should_auto_send(ev, "2026-10-15T20:30:00-05:00")
+    ev = dict(closure_eval, safety_instruction="Shelter in place and follow official instructions.")
+    assert should_auto_send(ev, "2026-10-15T20:30:00-05:00")
+
+
+def test_live_alert_list_shape(closure_eval):
+    # Live inputs carry a list of alerts in `value`; only a Tornado Warning in it triggers.
+    def live(events):
+        alert = {"id": "in_1", "role": "drove", "source": "NWS alerts", "label": "Active NWS alerts at facility point",
+                 "value": [{"event": e, "tier": "warning"} for e in events],
+                 "onset": "2026-10-16T12:00:00-05:00", "ends": "2026-10-16T14:00:00-05:00"}
+        return dict(closure_eval, safety_instruction=None, inputs=[alert])
+    assert not should_auto_send(live(["Flash Flood Warning", "Lake Wind Advisory"]), NOW)
+    assert should_auto_send(live(["Tornado Warning"]), NOW)

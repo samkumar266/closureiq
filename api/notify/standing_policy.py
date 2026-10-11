@@ -30,19 +30,36 @@ def _active_or_imminent(alert: dict, now: datetime) -> bool:
     return onset is None or parse_iso(onset) <= now + timedelta(minutes=IMMINENT_ONSET_MINUTES)
 
 
+def _event_names(alert_input: dict) -> list[str]:
+    """Alert event names: the input label, plus each alert's `event` when the
+    live input's value is a list of alerts."""
+    names = [str(alert_input.get("label", ""))]
+    value = alert_input.get("value")
+    if isinstance(value, list):
+        names += [str(a.get("event", "")) for a in value if isinstance(a, dict)]
+    return names
+
+
 def should_auto_send(evaluation: dict, now_sim: datetime | str) -> bool:
-    """True when the shelter-in-place standing policy applies."""
+    """True when the shelter-in-place standing policy applies.
+
+    Only the explicit phrase "shelter in place" counts. Generic advice such as
+    "seek appropriate shelter if directed" must never trigger an automatic send.
+    """
     if evaluation.get("hypothetical"):
         return False  # a what-if can never send anything
-    if "shelter" in str(evaluation.get("safety_instruction") or "").lower():
+    if "shelter in place" in str(evaluation.get("safety_instruction") or "").lower().replace("-", " "):
         return True
     now = parse_iso(now_sim)
     for alert in _alert_inputs(evaluation):
-        label = str(alert.get("label", ""))
-        if not label.endswith("Warning") or not _active_or_imminent(alert, now):
+        names = _event_names(alert)
+        if not _active_or_imminent(alert, now):
             continue
-        if "Tornado" in label:
+        if any(n.startswith("Tornado Warning") for n in names):
             return True
+        label = str(alert.get("label", ""))
+        if not label.endswith("Warning"):
+            continue
         onset = alert.get("onset")
         if onset and now <= parse_iso(onset) <= now + timedelta(minutes=IMMINENT_ONSET_MINUTES):
             return True
