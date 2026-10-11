@@ -1,12 +1,14 @@
 # Frontend image: builds the React app, then serves it with Caddy.
 # Needs frontend/package.json with a "build" script that writes frontend/dist.
+# The frontend imports fixtures from ../../mocks, so mocks/ is copied next to it.
 FROM node:20-alpine AS build
-WORKDIR /frontend
+WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci || npm install
 COPY frontend ./
+COPY mocks /app/mocks
 RUN npm run build
 
 FROM caddy:2-alpine
-COPY --from=build /frontend/dist /srv
+COPY --from=build /app/frontend/dist /srv
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
