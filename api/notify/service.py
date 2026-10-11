@@ -89,6 +89,8 @@ def send_real_email(result: dict, profile: dict, send_email_fn: Callable[[str, s
     for d in result["plan"]["deliveries"]:
         if d["real"]:
             d["provider_ref"] = sent.get("provider_ref")
+            # Log-only mode sent nothing, so the UI must not label it real.
+            d["real"] = sent.get("mode") == "resend"
     result["email"] = sent
     return sent
 
