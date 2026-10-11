@@ -36,12 +36,17 @@ def create_app(db_path: str | Path | None = None, *, enable_scheduler: bool | No
         if scheduler_enabled:
             async def alerts_job():
                 await asyncio.gather(*(poll_alerts(store, f) for f in FACILITIES.values()), return_exceptions=True)
+            async def timers_job():
+                from api.app import notify_wiring
+                for name, data in notify_wiring.run_due_timers(store, lambda eid: store.get_evaluation(eid)["result"]):
+                    await event_hub.publish(name, data)
             async def slow_job():
                 await asyncio.gather(*(poll_slow_sources(store, f, force=False) for f in FACILITIES.values()), return_exceptions=True)
             if AsyncIOScheduler is not None:
                 scheduler = AsyncIOScheduler(timezone="UTC")
                 scheduler.add_job(alerts_job, "interval", seconds=60, id="nws-alerts-poll", max_instances=1, coalesce=True)
                 scheduler.add_job(slow_job, "interval", seconds=900, id="slow-sources-poll", max_instances=1, coalesce=True)
+                scheduler.add_job(timers_job, "interval", seconds=1, id="notify-timers", max_instances=1, coalesce=True)
                 scheduler.start()
                 scheduler_holder["scheduler"] = scheduler
             else:
