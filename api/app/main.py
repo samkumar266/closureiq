@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from ai.chat import build_chat_agent, stream_agent_events, validate_answer
 from ..engine import Recommendation, run_what_if
 from ..store import SQLiteStore
 
@@ -30,6 +32,16 @@ class WhatIfResponse(BaseModel):
     based_on: str
     result: Recommendation
     changed_fields: list[str]
+
+
+class ChatRequest(BaseModel):
+    """Documented agent chat request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    facility_id: str
+    evaluation_id: str
+    message: str = Field(min_length=1)
 
 
 def create_app(store: SQLiteStore | None = None) -> FastAPI:
@@ -104,6 +116,41 @@ def create_app(store: SQLiteStore | None = None) -> FastAPI:
             changed_fields=result.changed_fields,
         )
 
+    @application.post("/api/agent/chat")
+    async def agent_chat(request: ChatRequest) -> StreamingResponse:
+        stored = api_store.get_evaluation(request.evaluation_id)
+        if stored is None or stored[0].facility_id != request.facility_id:
+            raise _error(404, "not_found", "evaluation was not found")
+        base, facility = stored
+        evidence = api_store.get_evidence(request.evaluation_id)
+        _append_audit(
+            api_store,
+            "agent_question",
+            {
+                "facility_id": request.facility_id,
+                "evaluation_id": request.evaluation_id,
+                "message": request.message,
+            },
+        )
+        try:
+            agent = build_chat_agent(base, evidence, facility, api_store)
+            events = stream_agent_events(agent, request.message)
+            first_event = await events.__anext__()
+        except Exception as exc:
+            raise _error(503, "agent_unavailable", "agent provider is unavailable") from exc
+
+        return StreamingResponse(
+            _stream_chat(
+                first_event,
+                events,
+                base=base,
+                facility=facility,
+                store=api_store,
+                prompt=request.message,
+            ),
+            media_type="text/event-stream",
+        )
+
     return application
 
 
@@ -115,3 +162,145 @@ def _error(status_code: int, code: str, message: str) -> HTTPException:
 
 
 app = create_app()
+
+
+def _append_audit(store: SQLiteStore, kind: str, detail: dict[str, Any]) -> None:
+    """Make audit failures visible to callers instead of claiming success."""
+    try:
+        store.append(kind, detail)
+    except Exception as exc:
+        raise _error(500, "audit_unavailable", "audit logging failed") from exc
+
+
+async def _stream_chat(
+    first_event: Any,
+    events: Any,
+    *,
+    base: Recommendation,
+    facility: Any,
+    store: SQLiteStore,
+    prompt: str,
+):
+    del prompt
+    answer_parts: list[str] = []
+    tool_results: list[dict[str, Any]] = []
+    seen_tools: set[str] = set()
+    whatif_id: str | None = None
+
+    async def consume(event: Any):
+        nonlocal whatif_id
+        tool = _tool_event(event)
+        if tool is not None:
+            tool_key = json.dumps(tool, sort_keys=True, default=str)
+            if tool_key not in seen_tools:
+                seen_tools.add(tool_key)
+                _append_audit(store, "agent_tool", tool)
+                yield _sse("tool", tool)
+        result = _tool_result(event)
+        if result is not None:
+            tool_results.append(result)
+            if result.get("hypothetical") is True:
+                possible = result.get("evaluation_id")
+                if isinstance(possible, str):
+                    whatif_id = possible
+        text = _event_text(event)
+        if text:
+            answer_parts.append(text)
+            yield _sse("token", {"text": text})
+
+    try:
+        async for item in consume(first_event):
+            yield item
+        async for event in events:
+            async for item in consume(event):
+                yield item
+    except Exception:
+        fallback = base.rationale
+        yield _sse("replaced", {"text": fallback})
+        _append_audit(
+            store,
+            "agent_answer",
+            {
+                "evaluation_id": base.evaluation_id,
+                "text": fallback,
+                "validated": False,
+                "whatif_id": whatif_id,
+            },
+        )
+        yield _sse(
+            "done",
+            {"evaluation_id": base.evaluation_id, "validated": False, "whatif_id": whatif_id},
+        )
+        return
+
+    answer = "".join(answer_parts)
+    validated = validate_answer(answer, tool_results, timezone=facility.timezone)
+    if not validated:
+        yield _sse("replaced", {"text": base.rationale})
+    final_text = answer if validated else base.rationale
+    _append_audit(
+        store,
+        "agent_answer",
+        {
+            "evaluation_id": base.evaluation_id,
+            "text": final_text,
+            "validated": validated,
+            "whatif_id": whatif_id,
+        },
+    )
+    yield _sse(
+        "done",
+        {
+            "evaluation_id": base.evaluation_id,
+            "validated": validated,
+            "whatif_id": whatif_id,
+        },
+    )
+
+
+def _event_text(event: Any) -> str:
+    if not isinstance(event, dict):
+        return ""
+    data = event.get("data")
+    if isinstance(data, str):
+        return data
+    if isinstance(data, dict) and isinstance(data.get("text"), str):
+        return data["text"]
+    return ""
+
+
+def _tool_event(event: Any) -> dict[str, Any] | None:
+    if not isinstance(event, dict):
+        return None
+    current = event.get("current_tool_use")
+    if not isinstance(current, dict):
+        return None
+    name = current.get("name")
+    if not isinstance(name, str):
+        return None
+    args = current.get("input", current.get("args", {}))
+    return {"name": name, "args": args if isinstance(args, dict) else {}}
+
+
+def _tool_result(event: Any) -> dict[str, Any] | None:
+    if not isinstance(event, dict):
+        return None
+    result = event.get("tool_result", event.get("toolResult"))
+    if not isinstance(result, dict):
+        return None
+    content = result.get("content")
+    if isinstance(content, list):
+        for item in content:
+            if not isinstance(item, dict) or not isinstance(item.get("text"), str):
+                continue
+            try:
+                decoded = json.loads(item["text"])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(decoded, dict):
+                return decoded
+    return result
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, sort_keys=True)}\n\n"
