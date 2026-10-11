@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatCountdown, formatDateTime } from '../format'
-import type { ApprovalStatus, Facility } from '../types'
+import type { AlertTier, ApprovalStatus, Facility } from '../types'
 import { PostureChip } from './PostureChip'
 import { SourceHealthDot } from './SourceHealthDot'
 
@@ -19,12 +19,22 @@ const approvalLabels: Record<ApprovalStatus, { label: string; className: string 
   unresolved: { label: 'UNRESOLVED', className: 'bg-red-100 text-red-900' },
 }
 
+const tierStyles: Record<AlertTier, string> = {
+  warning: 'bg-red-600 text-white',
+  watch: 'bg-amber-100 text-amber-900',
+  advisory: 'bg-sky-100 text-sky-900',
+  none: '',
+}
+
 export function FacilityCard({ facility, now }: FacilityCardProps) {
   const { current } = facility
   // Never show a calm posture next to a failed or stale source (contract: UI rules).
   const needsAttention = current?.confidence === 'low' || facility.source_health !== 'ok'
   // Unknown approval values from the backend fall back to a neutral chip instead of crashing.
   const approval = current ? (approvalLabels[current.approval_status] ?? approvalLabels.pending) : null
+  // A non-normal posture still waiting for an approver needs a decision now.
+  const decisionNeeded = current?.approval_status === 'pending' && current.posture !== 'normal_operations'
+  const { top_alert: topAlert } = facility
 
   return (
     <Link
@@ -40,6 +50,23 @@ export function FacilityCard({ facility, now }: FacilityCardProps) {
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm font-semibold text-slate-700">
             Not evaluated
           </span>
+        )}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {facility.highest_alert_tier !== 'none' && (
+          <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase ${tierStyles[facility.highest_alert_tier]}`}>
+            NWS {facility.highest_alert_tier}
+          </span>
+        )}
+        {topAlert && (
+          <span className="text-xs font-medium text-slate-700">
+            {topAlert.event}
+            {topAlert.severity && ` · ${topAlert.severity}`}
+            {topAlert.certainty && ` · ${topAlert.certainty}`}
+          </span>
+        )}
+        {decisionNeeded && (
+          <span className="rounded bg-amber-400 px-2 py-0.5 text-xs font-bold text-slate-950">Decision needed</span>
         )}
       </div>
       <p className="mt-3 line-clamp-3 text-sm text-slate-700">

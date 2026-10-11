@@ -102,6 +102,8 @@ export type Facility = {
     timezone: string
   }
   highest_alert_tier: AlertTier
+  // Optional, not yet sent by the backend: the alert behind highest_alert_tier, for the Watchlist card.
+  top_alert?: { event: string; severity: string | null; certainty: string | null } | null
   source_health: SourceHealth
   data_mode: DataMode
   // null until the backend has evaluated the facility for the first time.

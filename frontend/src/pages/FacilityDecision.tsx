@@ -141,14 +141,28 @@ export function FacilityDecision() {
             </Link>
             <h1 className="mt-1 text-3xl font-bold tracking-tight">{facility?.name ?? id}</h1>
           </div>
-          <StatusBadges
-            clockMode={clockMode}
-            dataMode={dataMode}
-            fromFixture={data?.fromFixture ?? false}
-            now={now}
-            speed={speed}
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            {data !== null && !data.fromFixture && recommendation !== null && (
+              <button
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                disabled={evaluating}
+                onClick={() => void runEvaluation()}
+                title="Poll the sources and run the engine now"
+                type="button"
+              >
+                {evaluating ? 'Evaluating…' : 'Re-evaluate'}
+              </button>
+            )}
+            <StatusBadges
+              clockMode={clockMode}
+              dataMode={dataMode}
+              fromFixture={data?.fromFixture ?? false}
+              now={now}
+              speed={speed}
+            />
+          </div>
         </header>
+        {evaluateError && recommendation !== null && <p className="text-sm text-red-700">{evaluateError}</p>}
 
         {data === null && <p className="text-slate-600">Loading the latest evaluation…</p>}
 
