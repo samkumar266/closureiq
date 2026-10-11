@@ -20,6 +20,11 @@ POSTURE_LABEL = {
 ON_SITE_GROUPS = {"essential", "onsite_telework_eligible",
                   "onsite_not_telework_eligible", "contractor"}
 
+# Not working on site today, but looped in on a closure or changed hours. Informational only:
+# email (nobody is woken by a text or call), and never escalated for a missing acknowledgment.
+INFORMATIONAL_GROUPS = {"on_leave_or_off", "already_teleworking"}
+CHANGED_OPERATIONS = {"closure", "delayed_arrival", "early_dismissal"}
+
 
 def channel_plan(employee: dict) -> list[str]:
     """Channel types in the order to try. voice_call_first moves voice to the front."""
@@ -35,8 +40,15 @@ def _decide(group: str, posture: str) -> tuple[bool, str]:
     label = POSTURE_LABEL[posture]
     if group == "detail_elsewhere":
         return False, "On detail at another office today; not assigned to this site"
+    # DEPRECATED(closureiq) START: people on leave or off were never told; they are now looped in on
+    # a closure or changed hours (informational).
+    # if group == "on_leave_or_off":
+    #     return False, "On leave or off today; no action needed"
+    # DEPRECATED(closureiq) END
     if group == "on_leave_or_off":
-        return False, "On leave or off today; no action needed"
+        if posture in CHANGED_OPERATIONS:
+            return True, f"On leave or off today; informational notice of the {label} so they stay informed"
+        return False, "On leave or off today; no change that affects them"
     if posture == "normal_operations":
         return False, "Normal operations; no change to work arrangement"
     if group == "essential":
@@ -45,9 +57,15 @@ def _decide(group: str, posture: str) -> tuple[bool, str]:
         return True, f"Assigned onsite today and telework-eligible; posture is {label}"
     if group == "onsite_not_telework_eligible":
         return True, f"Assigned onsite today and not telework-eligible; posture is {label}"
+    # DEPRECATED(closureiq) START: teleworkers were told about closure only; now also about changed hours.
+    # if group == "already_teleworking":
+    #     if posture == "closure":
+    #         return True, "Already teleworking; informational closure notice only"
+    #     return False, "Already teleworking; no change to work arrangement"
+    # DEPRECATED(closureiq) END
     if group == "already_teleworking":
-        if posture == "closure":
-            return True, "Already teleworking; informational closure notice only"
+        if posture in CHANGED_OPERATIONS:
+            return True, f"Already teleworking; informational notice of the {label}, keep teleworking"
         return False, "Already teleworking; no change to work arrangement"
     if group == "contractor":
         return True, "Contractor; told the site status, work status goes through the contract lead"
@@ -76,6 +94,11 @@ def select_recipients(roster: list[dict], posture: str,
         item = {"employee_id": employee["employee_id"], "included": included,
                 "group": group, "reason": reason}
         if included:
-            item["channel_plan"] = channel_plan(employee)
+            # DEPRECATED(closureiq): every included person got the full channel plan, even informational notices.
+            # item["channel_plan"] = channel_plan(employee)
+            plan = channel_plan(employee)
+            if group in INFORMATIONAL_GROUPS and not shelter_in_place:
+                plan = ["email"] if "email" in plan else plan[:1]
+            item["channel_plan"] = plan
         items.append(item)
     return items

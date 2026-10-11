@@ -64,12 +64,31 @@ def _en_parts(group: str, posture: str, t: dict) -> tuple[str, str, str] | None:
         return ("Yes, as site status. Your work status goes through your contract lead.",
                 "Contact your contract lead before coming on site.",
                 "Check with your contract lead before coming on site.")
+    # DEPRECATED(closureiq) START: teleworkers only had a closure message; changed hours now included.
+    # if group == "already_teleworking":
+    #     if posture != "closure":
+    #         return None
+    #     return ("For information only. You are already teleworking.",
+    #             "Keep teleworking as planned. Do not come to the building.",
+    #             "Keep teleworking and do not come to the building.")
+    # DEPRECATED(closureiq) END
+    building = {
+        "closure": f"The building is closed from {t['closed_from']} until {t['closed_until']}.",
+        "delayed_arrival": f"The building opens late, at {t['delay_until']}.",
+        "early_dismissal": f"The building closes early, at {t['dismiss_at']}.",
+    }.get(posture)
     if group == "already_teleworking":
-        if posture != "closure":
+        if building is None:
             return None
         return ("For information only. You are already teleworking.",
-                "Keep teleworking as planned. Do not come to the building.",
-                "Keep teleworking and do not come to the building.")
+                f"{building} Keep teleworking as planned; you do not need to come in.",
+                "Keep teleworking as planned.")
+    if group == "on_leave_or_off":
+        if building is None:
+            return None
+        return ("For information only. You are on leave or off today.",
+                f"{building} No action is needed from you today.",
+                "No action needed. Check for an update before your next shift.")
     eligible = group == "onsite_telework_eligible"
     if posture == "delayed_arrival":
         return ("Yes. You are assigned onsite today.",

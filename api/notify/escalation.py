@@ -24,6 +24,7 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 from api.clock import parse_iso
+from api.notify.recipients import INFORMATIONAL_GROUPS
 
 W_MIN_MINUTES = 5
 W_MAX_MINUTES = 30
@@ -111,9 +112,11 @@ def _unacked_action(timer: dict, ctx: dict) -> dict:
     """Group everyone not yet acknowledged by supervisor, with their contact status."""
     statuses = ctx.get("recipient_status_at", lambda at: {})(timer["due_at_sim"])
     supervisors = {e["employee_id"]: e.get("supervisor_id") for e in ctx.get("roster", [])}
+    # Informational notices (on leave, already teleworking) are not chased: no one is paged for them.
+    informational = {e["employee_id"] for e in ctx.get("roster", []) if e.get("group") in INFORMATIONAL_GROUPS}
     by_supervisor: dict[str, list[dict]] = {}
     for person, status in sorted(statuses.items()):
-        if status == "acknowledged":
+        if status == "acknowledged" or person in informational:
             continue
         sup = supervisors.get(person) or timer["payload"]["manager_id"]
         by_supervisor.setdefault(sup, []).append({"employee_id": person, "contact_status": status})

@@ -3,8 +3,12 @@ import pytest
 from api.notify.recipients import POSTURES
 from api.notify.templates import HEADINGS, fmt_time, render_message, render_shelter, variant_for
 
+# DEPRECATED(closureiq): on_leave_or_off had no message; it now gets an informational one on changed operations.
+# GROUPS = ["essential", "onsite_telework_eligible", "onsite_not_telework_eligible",
+#           "already_teleworking", "contractor"]
 GROUPS = ["essential", "onsite_telework_eligible", "onsite_not_telework_eligible",
-          "already_teleworking", "contractor"]
+          "already_teleworking", "on_leave_or_off", "contractor"]
+CHANGED_OPERATIONS = {"closure", "delayed_arrival", "early_dismissal"}
 TZ = "America/Chicago"
 PARAMS = {"delay_until": "2026-10-16T10:00:00-05:00", "dismiss_at": "2026-10-16T13:15:00-05:00",
           "closed_from": "2026-10-16T07:30:00-05:00", "closed_until": "2026-10-16T16:00:00-05:00",
@@ -16,7 +20,11 @@ PARAMS = {"delay_until": "2026-10-16T10:00:00-05:00", "dismiss_at": "2026-10-16T
 @pytest.mark.parametrize("variant", ["standard", "large_print"])
 def test_every_message_has_seven_parts(group, posture, variant):
     msg = render_message(group, posture, PARAMS, "Kansas City Service Center", TZ, variant)
-    if group == "already_teleworking" and posture != "closure":
+    # DEPRECATED(closureiq): teleworkers were only messaged on closure.
+    # if group == "already_teleworking" and posture != "closure":
+    #     assert msg is None
+    #     return
+    if group in {"already_teleworking", "on_leave_or_off"} and posture not in CHANGED_OPERATIONS:
         assert msg is None
         return
     text = msg["text"]

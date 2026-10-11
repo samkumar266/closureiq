@@ -94,7 +94,10 @@ def test_unacknowledged_fast_forward_lists_people_by_supervisor(closure_eval, kc
     fired, _, actions = fire_due(timers, "2026-10-15T21:01:00-05:00", ctx, ids)  # jump +30
     unacked = actions[0]["unacknowledged_by_supervisor"]
     statuses = recipient_status(plan, "2026-10-15T20:51:00-05:00")
-    expected = sorted(p for p, s in statuses.items() if s != "acknowledged")
+    # DEPRECATED(closureiq): everyone unacknowledged was chased, including informational notices.
+    # expected = sorted(p for p, s in statuses.items() if s != "acknowledged")
+    informational = {e["employee_id"] for e in kc_roster if e["group"] in {"on_leave_or_off", "already_teleworking"}}
+    expected = sorted(p for p, s in statuses.items() if s != "acknowledged" and p not in informational)
     assert sorted(x["employee_id"] for rows in unacked.values() for x in rows) == expected
     assert expected  # someone was left unacknowledged
     assert "e_001" in actions[0]["notify"]
