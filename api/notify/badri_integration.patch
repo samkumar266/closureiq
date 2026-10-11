@@ -1,0 +1,446 @@
+--- a/api/app/routes.py
++++ b/api/app/routes.py
+@@ -17,7 +17,7 @@
+ from api.ingest.normalizers import highest_alert_tier, parse_datetime
+ from api.app.engine_adapter import evaluate_recommendation, POSTURES
+ from api.app.events import event_hub
+-from api.app.notification_adapter import build_package, preview_response
++from api.app import notify_wiring
+ from api.app.roster import get_roster
+ from api.app.thresholds import thresholds_response
+ from api.store.repository import Store
+@@ -254,6 +254,7 @@
+         supersedes=previous["id"] if previous else None,
+     )
+     saved = evaluation["result"]
++    notify_wiring.on_evaluation_created(store, saved, facility)
+     changed = not previous or previous["result"].get("posture") != saved.get("posture") or previous["result"].get("confidence") != saved.get("confidence")
+     await event_hub.publish("evaluation.created", {
+         "facility_id": facility_id, "evaluation_id": saved["evaluation_id"],
+@@ -399,7 +400,7 @@
+ 
+ 
+ @router.post("/clock")
+-def set_clock(body: ClockRequest, request: Request):
++async def set_clock(body: ClockRequest, request: Request):
+     if body.mode not in {"system", "simulated"}:
+         raise_contract_error(400, "bad_request", "mode must be 'system' or 'simulated'")
+     if not 0 < body.speed <= 600:
+@@ -408,8 +409,11 @@
+         parsed = parse_datetime(body.set_to)
+         if parsed is None:
+             raise_contract_error(400, "bad_request", "set_to must be an ISO 8601 timestamp with an offset")
+-    result = store_from_request(request).set_clock(body.mode, body.speed, body.set_to)
++    store = store_from_request(request)
++    result = store.set_clock(body.mode, body.speed, body.set_to)
+     asyncio.create_task(event_hub.publish("clock.changed", result))
++    for name, data in notify_wiring.run_due_timers(store, lambda eid: store.get_evaluation(eid)["result"]):
++        asyncio.create_task(event_hub.publish(name, data))
+     return result
+ 
+ 
+@@ -421,8 +425,7 @@
+         raise_contract_error(404, "not_found", "Unknown evaluation", {"evaluation_id": evaluation_id})
+     if posture is not None and posture not in POSTURES:
+         raise_contract_error(422, "invalid_posture", "Override posture is not one of the five allowed values", {"posture": posture})
+-    result = preview_response(record["result"], posture)
+-    return result
++    return notify_wiring.preview(store, record, get_facility(record["facility_id"]), posture)
+ 
+ 
+ def _stale_check(store: Store, evaluation_id: str, facility_id: str):
+@@ -451,21 +454,9 @@
+ 
+ 
+ def _create_notification(store: Store, evaluation: dict, approval: dict, final_posture: str) -> dict:
+-    package = build_package(evaluation, final_posture)
+-    notification = store.append_notification(
+-        evaluation_id=evaluation["evaluation_id"], approval_id=approval["id"],
+-        package=package, ack_deadline=evaluation.get("decision_deadline"),
+-        next_update=(evaluation.get("parameters") or {}).get("next_update"),
+-    )
+-    # All channels are simulated until Suraj explicitly wires a real email provider.
+-    for recipient in package["recipients"]:
+-        if not recipient.get("included"):
+-            continue
+-        for channel in recipient.get("channel_plan", []):
+-            store.append_delivery(notification_id=notification["id"],
+-                                  recipient_id=recipient["employee_id"], channel=channel,
+-                                  real=False, status="simulated")
+-    return store.get_notification(notification["id"])
++    facility = get_facility(evaluation["facility_id"])
++    notification = notify_wiring.on_decision(store, evaluation, facility, approval, final_posture)
++    return {"id": notification["id"]} if notification else None
+ 
+ 
+ @router.post("/evaluations/{evaluation_id}/approve")
+@@ -509,6 +500,7 @@
+     approval = store.append_approval(evaluation_id=evaluation_id, action="reject",
+                                      final_posture=record["result"]["posture"], actor=body.actor,
+                                      reason=body.reason.strip())
++    notify_wiring.on_decision(store, record["result"], get_facility(record["facility_id"]), approval, None)
+     await event_hub.publish("approval.recorded", {"evaluation_id": evaluation_id,
+                               "action": "reject", "final_posture": approval["final_posture"]})
+     return _approval_response(approval, None, get_facility(record["facility_id"])["location"]["timezone"])
+@@ -556,6 +548,7 @@
+             "channel": delivery["channel"], "real": delivery["real"],
+             "status": delivery["status"], "status_at_wall": _local_iso(delivery["status_at_wall"], timezone_name),
+         })
++    record["escalation"] = notify_wiring.escalation_for(store_from_request(request), record["evaluation_id"], timezone_name)
+     return {
+         "notification_id": record["id"], "evaluation_id": record["evaluation_id"],
+         "approval_id": record["approval_id"], "standing_policy": record["standing_policy"],
+--- a/api/main.py
++++ b/api/main.py
+@@ -36,12 +36,17 @@
+         if scheduler_enabled:
+             async def alerts_job():
+                 await asyncio.gather(*(poll_alerts(store, f) for f in FACILITIES.values()), return_exceptions=True)
++            async def timers_job():
++                from api.app import notify_wiring
++                for name, data in notify_wiring.run_due_timers(store, lambda eid: store.get_evaluation(eid)["result"]):
++                    await event_hub.publish(name, data)
+             async def slow_job():
+                 await asyncio.gather(*(poll_slow_sources(store, f, force=False) for f in FACILITIES.values()), return_exceptions=True)
+             if AsyncIOScheduler is not None:
+                 scheduler = AsyncIOScheduler(timezone="UTC")
+                 scheduler.add_job(alerts_job, "interval", seconds=60, id="nws-alerts-poll", max_instances=1, coalesce=True)
+                 scheduler.add_job(slow_job, "interval", seconds=900, id="slow-sources-poll", max_instances=1, coalesce=True)
++                scheduler.add_job(timers_job, "interval", seconds=1, id="notify-timers", max_instances=1, coalesce=True)
+                 scheduler.start()
+                 scheduler_holder["scheduler"] = scheduler
+             else:
+--- a/api/store/database.py
++++ b/api/store/database.py
+@@ -68,8 +68,9 @@
+ );
+ CREATE TABLE IF NOT EXISTS notifications (
+     id TEXT PRIMARY KEY,
+-    evaluation_id TEXT NOT NULL UNIQUE REFERENCES evaluations(id),
++    evaluation_id TEXT NOT NULL REFERENCES evaluations(id),
+     approval_id TEXT REFERENCES approvals(id),
++    idempotency_key TEXT NOT NULL UNIQUE,
+     standing_policy TEXT,
+     package_json TEXT NOT NULL,
+     ack_deadline TEXT,
+--- a/api/store/repository.py
++++ b/api/store/repository.py
+@@ -267,22 +267,6 @@
+             row = con.execute("SELECT * FROM approvals WHERE evaluation_id=?", (evaluation_id,)).fetchone()
+         return dict(row) if row else None
+ 
+-    def append_notification(self, *, evaluation_id: str, approval_id: str | None,
+-                            package: dict, ack_deadline: str | None = None,
+-                            next_update: str | None = None, standing_policy: str | None = None,
+-                            preview: bool = False) -> dict:
+-        notification_id = self._next_id("ntf")
+-        wall = iso()
+-        sim = self.clock_now_sim()
+-        with self.db.connect() as con:
+-            con.execute(
+-                """INSERT INTO notifications
+-                (id,evaluation_id,approval_id,standing_policy,package_json,ack_deadline,next_update,preview,created_at_wall,created_at_sim)
+-                VALUES(?,?,?,?,?,?,?,?,?,?)""",
+-                (notification_id, evaluation_id, approval_id, standing_policy, _json_dump(package),
+-                 ack_deadline, next_update, int(preview), wall, sim),
+-            )
+-        return self.get_notification(notification_id)
+ 
+     def get_notification(self, notification_id: str) -> dict | None:
+         with self.db.connect() as con:
+@@ -301,29 +285,7 @@
+             row = con.execute("SELECT id FROM notifications WHERE evaluation_id=? ORDER BY rowid DESC LIMIT 1", (evaluation_id,)).fetchone()
+         return self.get_notification(row["id"]) if row else None
+ 
+-    def append_delivery(self, *, notification_id: str, recipient_id: str, channel: str,
+-                        real: bool = False, status: str = "simulated", provider_ref: str | None = None) -> dict:
+-        delivery_id = self._next_id("dlv")
+-        wall = iso()
+-        sim = self.clock_now_sim()
+-        with self.db.connect() as con:
+-            con.execute(
+-                "INSERT INTO deliveries(id,notification_id,recipient_id,channel,real,provider_ref,created_at_wall,created_at_sim) VALUES(?,?,?,?,?,?,?,?)",
+-                (delivery_id, notification_id, recipient_id, channel, int(real), provider_ref, wall, sim),
+-            )
+-        self.append_delivery_status(delivery_id, status)
+-        return self.get_delivery(delivery_id)
+ 
+-    def append_delivery_status(self, delivery_id: str, status: str) -> dict:
+-        event_id = self._next_id("dse")
+-        wall = iso()
+-        sim = self.clock_now_sim()
+-        with self.db.connect() as con:
+-            con.execute(
+-                "INSERT INTO delivery_status_history(event_id,delivery_id,status,status_at_wall,status_at_sim) VALUES(?,?,?,?,?)",
+-                (event_id, delivery_id, status, wall, sim),
+-            )
+-        return self.get_delivery(delivery_id)
+ 
+     def get_delivery(self, delivery_id: str) -> dict | None:
+         with self.db.connect() as con:
+@@ -401,3 +363,92 @@
+ 
+     def all_evidence_for_facility(self, facility_id: str) -> list[dict]:
+         return self.all_success_snapshots(facility_id)
++
++    def append_notification(self, *, evaluation_id: str, approval_id: str | None,
++                            package: dict, ack_deadline: str | None = None,
++                            next_update: str | None = None, standing_policy: str | None = None,
++                            preview: bool = False, notification_id: str | None = None,
++                            idempotency_key: str | None = None) -> dict:
++        notification_id = notification_id or self._next_id("ntf")
++        idempotency_key = idempotency_key or f"{evaluation_id}:{standing_policy or 'approval'}"
++        wall = iso()
++        sim = self.clock_now_sim()
++        with self.db.connect() as con:
++            con.execute(
++                """INSERT INTO notifications
++                (id,evaluation_id,approval_id,standing_policy,package_json,ack_deadline,next_update,preview,created_at_wall,created_at_sim,idempotency_key)
++                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
++                (notification_id, evaluation_id, approval_id, standing_policy, _json_dump(package),
++                 ack_deadline, next_update, int(preview), wall, sim, idempotency_key),
++            )
++        return self.get_notification(notification_id)
++
++    def append_delivery(self, *, notification_id: str, recipient_id: str, channel: str,
++                        real: bool = False, status: str = "simulated", provider_ref: str | None = None,
++                        delivery_id: str | None = None, at_sim: str | None = None) -> dict:
++        delivery_id = delivery_id or self._next_id("dlv")
++        wall = iso()
++        sim = at_sim or self.clock_now_sim()
++        with self.db.connect() as con:
++            con.execute(
++                "INSERT INTO deliveries(id,notification_id,recipient_id,channel,real,provider_ref,created_at_wall,created_at_sim) VALUES(?,?,?,?,?,?,?,?)",
++                (delivery_id, notification_id, recipient_id, channel, int(real), provider_ref, wall, sim),
++            )
++        self.append_delivery_status(delivery_id, status, at_sim=at_sim)
++        return self.get_delivery(delivery_id)
++
++    def append_delivery_status(self, delivery_id: str, status: str, at_sim: str | None = None) -> dict:
++        event_id = self._next_id("dse")
++        wall = iso()
++        sim = at_sim or self.clock_now_sim()
++        with self.db.connect() as con:
++            con.execute(
++                "INSERT INTO delivery_status_history(event_id,delivery_id,status,status_at_wall,status_at_sim) VALUES(?,?,?,?,?)",
++                (event_id, delivery_id, status, wall, sim),
++            )
++        return self.get_delivery(delivery_id)
++
++    # ---- notify integration (pasted from api/notify/INTEGRATION.md) ----
++
++    def get_notification_by_key(self, idempotency_key: str) -> dict | None:
++        with self.db.connect() as con:
++            row = con.execute("SELECT id FROM notifications WHERE idempotency_key=?", (idempotency_key,)).fetchone()
++        return self.get_notification(row["id"]) if row else None
++
++    def append_timer(self, row: dict) -> None:
++        """Insert one timer row built by api/notify (it already has its id and due_at_sim)."""
++        with self.db.connect() as con:
++            con.execute(
++                """INSERT INTO timers(id,kind,due_at_sim,payload_json,fired_at_sim,cancelled_at_sim,created_at_wall,created_at_sim)
++                VALUES(?,?,?,?,?,?,?,?)""",
++                (row["id"], row["kind"], row["due_at_sim"], _json_dump(row["payload"]), row.get("fired_at_sim"),
++                 row.get("cancelled_at_sim"), iso(), row.get("created_at_sim") or self.clock_now_sim()),
++            )
++
++    @staticmethod
++    def _timer_row(row) -> dict:
++        record = dict(row)
++        record["payload"] = _json_load(record.pop("payload_json"), {})
++        return record
++
++    def list_timers(self, evaluation_id: str | None = None, pending_only: bool = False) -> list[dict]:
++        sql = "SELECT * FROM timers"
++        if pending_only:
++            sql += " WHERE fired_at_sim IS NULL AND cancelled_at_sim IS NULL"
++        with self.db.connect() as con:
++            rows = [self._timer_row(r) for r in con.execute(sql + " ORDER BY rowid").fetchall()]
++        if evaluation_id:
++            rows = [r for r in rows if r["payload"].get("evaluation_id") == evaluation_id]
++        return rows
++
++    def mark_timer_fired(self, timer_id: str, at_sim: str) -> None:
++        """The one allowed update: fired_at_sim is set once, plus an audit row."""
++        with self.db.connect() as con:
++            con.execute("UPDATE timers SET fired_at_sim=? WHERE id=? AND fired_at_sim IS NULL", (at_sim, timer_id))
++        self.append_audit("timer.fired", {"timer_id": timer_id, "at_sim": at_sim})
++
++    def mark_timer_cancelled(self, timer_id: str, at_sim: str) -> None:
++        with self.db.connect() as con:
++            con.execute("UPDATE timers SET cancelled_at_sim=? WHERE id=? AND cancelled_at_sim IS NULL AND fired_at_sim IS NULL",
++                        (at_sim, timer_id))
++        self.append_audit("timer.cancelled", {"timer_id": timer_id, "at_sim": at_sim})
+--- /dev/null
++++ b/api/app/notify_wiring.py
+@@ -0,0 +1,170 @@
++"""Wires api/notify into the API. Pasted from api/notify/INTEGRATION.md.
++
++Everything here reads and writes through the Store; api/notify itself stays pure.
++"""
++from __future__ import annotations
++
++import json
++import os
++import random
++from pathlib import Path
++
++from api.notify import escalation, service, standing_policy
++from api.notify.email_sender import send_email
++from api.notify.package import build_preview
++from api.notify.simulator import recipient_status_from_deliveries
++
++SEED_DIR = Path(__file__).resolve().parents[2] / "mocks" / "seed"
++TEMPLATE_FACILITY = "kc-service-center"  # roster used when a facility has no seed roster
++
++
++def storm_mode() -> bool:
++    return os.getenv("NOTIFY_STORM_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
++
++
++def load_profile(facility: dict) -> dict:
++    profiles = json.loads((SEED_DIR / "facility_profiles.json").read_text())["facilities"]
++    seed = next((p for p in profiles if p["facility_id"] == facility["facility_id"]), None)
++    return seed or facility
++
++
++def load_roster(facility_id: str) -> list[dict]:
++    path = SEED_DIR / f"roster_{facility_id}.json"
++    if not path.exists():
++        path = SEED_DIR / f"roster_{TEMPLATE_FACILITY}.json"
++    return json.loads(path.read_text())["employees"]
++
++
++def _rng(evaluation_id: str, kind: str) -> random.Random:
++    return random.Random(f"{evaluation_id}:{kind}")  # same evaluation -> same simulation
++
++
++class StoreOutbox:
++    """dict-like view of notifications keyed by idempotency_key, for service.notify_once."""
++
++    def __init__(self, store, approval_id: str | None):
++        self.store, self.approval_id = store, approval_id
++
++    def __contains__(self, key):
++        return self.store.get_notification_by_key(key) is not None
++
++    def __getitem__(self, key):
++        return self.store.get_notification_by_key(key)
++
++    def __setitem__(self, key, result):
++        pkg = result["notification"]
++        self.store.append_notification(
++            evaluation_id=pkg["evaluation_id"], approval_id=pkg["approval_id"], package=pkg["package"],
++            ack_deadline=pkg["ack_deadline"], next_update=pkg["next_update"],
++            standing_policy=pkg["standing_policy"], notification_id=pkg["notification_id"],
++            idempotency_key=key)
++
++
++def preview(store, evaluation_record: dict, facility: dict, posture: str | None) -> dict:
++    """Body for GET /api/evaluations/{id}/package-preview."""
++    return build_preview(evaluation_record["result"], load_profile(facility),
++                         load_roster(facility["facility_id"]), posture, now_sim=store.clock_now_sim())
++
++
++def _send(store, evaluation: dict, facility: dict, *, posture, approval_id, kind) -> dict:
++    key = service.idempotency_key(evaluation["evaluation_id"], kind)
++    existing = store.get_notification_by_key(key)
++    if existing:
++        return existing  # already sent: a double approve sends nothing
++    result, created = service.notify(
++        key, StoreOutbox(store, approval_id), evaluation, load_profile(facility),
++        load_roster(facility["facility_id"]), send_email_fn=send_email, posture=posture,
++        approval_id=approval_id, notification_id=store._next_id("ntf"), now_sim=store.clock_now_sim(),
++        rng=_rng(evaluation["evaluation_id"], kind), next_delivery_id=lambda: store._next_id("dlv"),
++        next_timer_id=lambda: store._next_id("tmr"),
++        standing_policy=standing_policy.STANDING_POLICY if kind == standing_policy.STANDING_POLICY else None,
++        storm=storm_mode())
++    if not created:
++        return result  # already stored: a double approve sends nothing
++    for row in result["timers"]:
++        store.append_timer(row)
++    store.append_audit("notification.sent", {"evaluation_id": evaluation["evaluation_id"],
++                                             "notification_id": result["notification"]["notification_id"],
++                                             "email_mode": result.get("email", {}).get("mode")})
++    return store.get_notification_by_key(key)
++
++
++def on_decision(store, evaluation: dict, facility: dict, approval: dict, final_posture: str | None) -> dict | None:
++    """Call after append_approval. Cancels the manager chain; builds and sends unless rejected."""
++    now = store.clock_now_sim()
++    for row in store.list_timers(evaluation["evaluation_id"], pending_only=True):
++        if row["kind"] in escalation.APPROVAL_KINDS:
++            store.mark_timer_cancelled(row["id"], now)
++    if approval["action"] == "reject":
++        return None
++    return _send(store, evaluation, facility, posture=final_posture, approval_id=approval["id"], kind="approval")
++
++
++def on_evaluation_created(store, evaluation: dict, facility: dict) -> dict | None:
++    """Call after append_evaluation. Starts the manager-response timers and the
++    shelter-in-place standing-policy send (the only automatic send)."""
++    now = store.clock_now_sim()
++    shelter = standing_policy.should_auto_send(evaluation, now)
++    if evaluation.get("posture") != "normal_operations" or shelter:
++        for row in escalation.schedule_approval_timers(evaluation, load_profile(facility), now,
++                                                       lambda: store._next_id("tmr"), shelter):
++            store.append_timer(row)
++    if shelter:
++        return _send(store, evaluation, facility, posture=None, approval_id=None,
++                     kind=standing_policy.STANDING_POLICY)
++    return None
++
++
++def run_due_timers(store, evaluation_lookup) -> list[tuple[str, dict]]:
++    """Fire every due timer in order. Returns SSE events [(name, data), ...] to publish.
++
++    evaluation_lookup(evaluation_id) -> recommendation dict (store.get_evaluation(id)["result"]).
++    Call it once a second from the scheduler, and right after POST /api/clock.
++    """
++    timers = store.list_timers(pending_only=True)
++    events: list[tuple[str, dict]] = []
++
++    def on_fire(timer, action):
++        store.mark_timer_fired(timer["id"], timer["due_at_sim"])
++        if action["kind"] == "delivery_status":
++            if action["status"] == "queued":
++                store.append_delivery(notification_id=action["notification_id"], recipient_id=action["recipient_id"],
++                                      channel=action["channel"], real=action["real"], status="queued",
++                                      provider_ref=action.get("provider_ref"), delivery_id=action["delivery_id"],
++                                      at_sim=action["at_sim"])
++            else:
++                store.append_delivery_status(action["delivery_id"], action["status"], at_sim=action["at_sim"])
++            events.append(("delivery.updated", {"delivery_id": action["delivery_id"],
++                                                "notification_id": action["notification_id"],
++                                                "status": action["status"]}))
++            return
++        store.append_audit("escalation.fired", {**action, "evaluation_id": timer["payload"].get("evaluation_id")})
++        if action.get("mark_unresolved"):
++            store.append_audit("evaluation.unresolved", {"evaluation_id": timer["payload"]["evaluation_id"]})
++        events.append(("escalation.fired", {"notification_id": timer["payload"].get("notification_id"),
++                                            "step": action["kind"], "next_due_sim": None}))
++
++    # Fire per evaluation so each ack timer sees only its own notification's deliveries.
++    for evaluation_id in dict.fromkeys(t["payload"].get("evaluation_id") for t in timers):
++        group = [t for t in timers if t["payload"].get("evaluation_id") == evaluation_id]
++        evaluation = evaluation_lookup(evaluation_id)
++        notification_ids = {t["payload"]["notification_id"] for t in group if t["payload"].get("notification_id")}
++
++        def statuses(_at, ids=notification_ids):
++            return recipient_status_from_deliveries([d for nid in ids for d in store.list_deliveries(nid)])
++        ctx = {"evaluation": evaluation, "roster": load_roster(evaluation["facility_id"]),
++               "recipient_status_at": statuses}
++        _, new_rows, _ = escalation.fire_due(group, store.clock_now_sim(), ctx,
++                                             lambda: store._next_id("tmr"), on_fire=on_fire)
++        for row in new_rows:  # follow-ups such as UNRESOLVED; may already be fired
++            store.append_timer(row)
++    next_due_sim = escalation.next_due(store.list_timers(pending_only=True))
++    for name, data in events:
++        if name == "escalation.fired":
++            data["next_due_sim"] = next_due_sim
++    return events
++
++
++def escalation_for(store, evaluation_id: str, tz_name: str) -> list[dict]:
++    """Contract escalation[] for GET /api/notifications/{id}."""
++    return escalation.escalation_view(store.list_timers(evaluation_id), tz_name)
