@@ -1,58 +1,23 @@
-"""Synthetic facility profiles. Replace demo locations to match the team seed data.
+"""Facility profiles for the Watchlist: the three synthetic sites in mocks/seed/.
 
-The first facility uses the exact coordinate supplied for Badri's NWS integration.
-The second comes from the architecture example. The third is an additional demo slot.
-These are not real customer facilities.
+Read once at import. These are not real customer facilities. To add or change a
+site, edit mocks/seed/facility_profiles.json (and its roster file).
 """
 from __future__ import annotations
 
-FACILITIES: dict[str, dict] = {
-    "central-fl-service-center": {
-        "facility_id": "central-fl-service-center",
-        "name": "Central Florida Service Center",
-        "location": {"lat": 29.18, "lon": -82.21, "timezone": "America/New_York"},
-        "hours": {"open": "07:30", "close": "16:00"},
-        "arrival_window": {"start": "07:00", "end": "08:30"},
-        "departure_window": {"start": "15:00", "end": "16:30"},
-        "commute_buffer_min": 45,
-        "notification_lead_min": 90,
-        "earliest_departure": "06:15",
-        "assembly_point": "North parking lot",
-        "manager_id": "e_001", "backup_manager_id": "e_002", "on_call_id": "e_003",
-        "gauge": None,
-        "policy_version": "policy-2026-10-10.1",
-    }
-    # "kc-service-center": {
-    #     "facility_id": "kc-service-center",
-    #     "name": "Kansas City Service Center",
-    #     "location": {"lat": 39.0997, "lon": -94.5786, "timezone": "America/Chicago"},
-    #     "hours": {"open": "07:30", "close": "16:00"},
-    #     "arrival_window": {"start": "07:00", "end": "08:30"},
-    #     "departure_window": {"start": "15:00", "end": "16:30"},
-    #     "commute_buffer_min": 45,
-    #     "notification_lead_min": 90,
-    #     "earliest_departure": "06:15",
-    #     "assembly_point": "North parking lot",
-    #     "manager_id": "e_001", "backup_manager_id": "e_002", "on_call_id": "e_003",
-    #     "gauge": {"usgs_site": "06893000", "nwps_id": "KCDM7"},
-    #     "policy_version": "policy-2026-10-10.1",
-    # },
-    # "jacksonville-service-center": {
-    #     "facility_id": "jacksonville-service-center",
-    #     "name": "Jacksonville Service Center",
-    #     "location": {"lat": 30.3322, "lon": -81.6557, "timezone": "America/New_York"},
-    #     "hours": {"open": "07:30", "close": "16:00"},
-    #     "arrival_window": {"start": "07:00", "end": "08:30"},
-    #     "departure_window": {"start": "15:00", "end": "16:30"},
-    #     "commute_buffer_min": 45,
-    #     "notification_lead_min": 90,
-    #     "earliest_departure": "06:15",
-    #     "assembly_point": "North parking lot",
-    #     "manager_id": "e_001", "backup_manager_id": "e_002", "on_call_id": "e_003",
-    #     "gauge": None,
-    #     "policy_version": "policy-2026-10-10.1",
-    # },
-}
+import copy
+import json
+from pathlib import Path
+
+SEED_PROFILES = Path(__file__).resolve().parents[1] / "mocks" / "seed" / "facility_profiles.json"
+
+
+def _load() -> dict[str, dict]:
+    profiles = json.loads(SEED_PROFILES.read_text())["facilities"]
+    return {p["facility_id"]: p for p in profiles}
+
+
+FACILITIES: dict[str, dict] = _load()
 
 
 def get_facility(facility_id: str) -> dict | None:
@@ -60,7 +25,6 @@ def get_facility(facility_id: str) -> dict | None:
     facility = FACILITIES.get(facility_id)
     if facility is None:
         return None
-    import copy
     return copy.deepcopy(facility)
 
 

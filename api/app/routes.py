@@ -18,7 +18,6 @@ from api.ingest.normalizers import highest_alert_tier, parse_datetime
 from api.app.engine_adapter import evaluate_recommendation, POSTURES
 from api.app.events import event_hub
 from api.app import notify_wiring
-from api.app.roster import get_roster
 from api.app.thresholds import thresholds_response
 from api.store.repository import Store
 
@@ -211,7 +210,7 @@ def facility_roster(facility_id: str):
     facility = get_facility(facility_id)
     if not facility:
         raise_contract_error(404, "not_found", "Unknown facility", {"facility_id": facility_id})
-    return {"employees": get_roster()}
+    return {"employees": notify_wiring.load_roster(facility_id)}
 
 
 @router.get("/facilities/{facility_id}/status")
