@@ -1,0 +1,97 @@
+{
+  "facilities": [
+    {
+      "facility_id": "kc-service-center",
+      "name": "Kansas City Service Center",
+      "location": {
+        "lat": 39.0997,
+        "lon": -94.5786,
+        "timezone": "America/Chicago"
+      },
+      "hours": {
+        "open": "07:30",
+        "close": "16:00"
+      },
+      "arrival_window": {
+        "start": "07:00",
+        "end": "08:30"
+      },
+      "departure_window": {
+        "start": "15:00",
+        "end": "16:30"
+      },
+      "commute_buffer_min": 45,
+      "notification_lead_min": 90,
+      "earliest_departure": "06:15",
+      "assembly_point": "North parking lot",
+      "manager_id": "e_001",
+      "backup_manager_id": "e_002",
+      "on_call_id": "e_003",
+      "gauge": {
+        "usgs_site": "06893000",
+        "nwps_id": "KCDM7"
+      },
+      "policy_version": "policy-2026-10-10.1"
+    },
+    {
+      "facility_id": "stl-service-center",
+      "name": "St. Louis Service Center",
+      "location": {
+        "lat": 38.627,
+        "lon": -90.1994,
+        "timezone": "America/Chicago"
+      },
+      "hours": {
+        "open": "07:30",
+        "close": "16:00"
+      },
+      "arrival_window": {
+        "start": "07:00",
+        "end": "08:30"
+      },
+      "departure_window": {
+        "start": "15:00",
+        "end": "16:30"
+      },
+      "commute_buffer_min": 45,
+      "notification_lead_min": 90,
+      "earliest_departure": "06:15",
+      "assembly_point": "East lawn by Gate 2",
+      "manager_id": "e_101",
+      "backup_manager_id": "e_102",
+      "on_call_id": "e_103",
+      "gauge": null,
+      "policy_version": "policy-2026-10-10.1"
+    },
+    {
+      "facility_id": "omaha-service-center",
+      "name": "Omaha Service Center",
+      "location": {
+        "lat": 41.2565,
+        "lon": -95.9345,
+        "timezone": "America/Chicago"
+      },
+      "hours": {
+        "open": "07:30",
+        "close": "16:00"
+      },
+      "arrival_window": {
+        "start": "07:00",
+        "end": "08:30"
+      },
+      "departure_window": {
+        "start": "15:00",
+        "end": "16:30"
+      },
+      "commute_buffer_min": 45,
+      "notification_lead_min": 90,
+      "earliest_departure": "06:15",
+      "assembly_point": "South courtyard",
+      "manager_id": "e_201",
+      "backup_manager_id": "e_202",
+      "on_call_id": "e_203",
+      "gauge": null,
+      "policy_version": "policy-2026-10-10.1"
+    }
+  ]
+}

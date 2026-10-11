@@ -1,14 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { FacilityDecision } from './pages/FacilityDecision'
 import { Watchlist } from './pages/Watchlist'
-
-function Facility() {
-  return (
-    <main className="min-h-screen p-8">
-      <h1 className="text-3xl font-semibold">Facility</h1>
-      <p className="mt-2 text-slate-600">Facility details will appear here.</p>
-    </main>
-  )
-}
 
 function Record() {
   return (
@@ -24,7 +16,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Watchlist />} />
-        <Route path="/facilities/:id" element={<Facility />} />
+        <Route path="/facilities/:id" element={<FacilityDecision />} />
         <Route path="/records/:id" element={<Record />} />
       </Routes>
     </BrowserRouter>

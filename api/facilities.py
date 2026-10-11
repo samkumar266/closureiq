@@ -21,7 +21,22 @@ FACILITIES: dict[str, dict] = {
         "manager_id": "e_001", "backup_manager_id": "e_002", "on_call_id": "e_003",
         "gauge": None,
         "policy_version": "policy-2026-10-10.1",
-    }
+    },
+    "aiken-sc-service-center": {
+        "facility_id": "aiken-sc-service-center",
+        "name": "Aiken County Service Center",
+        "location": {"lat": 33.875, "lon": -81.575, "timezone": "America/New_York"},
+        "hours": {"open": "07:30", "close": "16:00"},
+        "arrival_window": {"start": "07:00", "end": "08:30"},
+        "departure_window": {"start": "15:00", "end": "16:30"},
+        "commute_buffer_min": 45,
+        "notification_lead_min": 90,
+        "earliest_departure": "06:15",
+        "assembly_point": "South access gate",
+        "manager_id": "e_101", "backup_manager_id": "e_102", "on_call_id": "e_103",
+        "gauge": None,
+        "policy_version": "policy-2026-10-10.1",
+    },
     # "kc-service-center": {
     #     "facility_id": "kc-service-center",
     #     "name": "Kansas City Service Center",

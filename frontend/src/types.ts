@@ -13,7 +13,8 @@ export type RecommendationInput = {
   role: 'drove' | 'context'
   source: string
   label: string
-  value: number | Record<string, unknown>
+  // The live backend also sends lists (active alerts, hourly periods) here.
+  value: number | Record<string, unknown> | unknown[] | null
   unit?: string
   onset?: string
   ends?: string
@@ -103,15 +104,18 @@ export type Facility = {
   highest_alert_tier: AlertTier
   source_health: SourceHealth
   data_mode: DataMode
-  current: {
-    evaluation_id: string
-    posture: Posture
-    confidence: ConfidenceLevel
-    evaluated_at: string
-    decision_deadline: string | null
-    headline: string
-    approval_status: ApprovalStatus
-  }
+  // null until the backend has evaluated the facility for the first time.
+  current: FacilityCurrent | null
+}
+
+export type FacilityCurrent = {
+  evaluation_id: string
+  posture: Posture
+  confidence: ConfidenceLevel
+  evaluated_at: string
+  decision_deadline: string | null
+  headline: string
+  approval_status: ApprovalStatus
 }
 
 export type SourceStatus = {
@@ -155,10 +159,11 @@ export type Employee = {
   employee_id: string
   name: string
   group: EmployeeGroup
-  assignment_type: 'assigned' | 'detail_in' | 'detail_out' | 'contractor'
+  // Free text: the seed roster and the backend use different values (onsite vs assigned, and so on).
+  assignment_type: string
   shift_start: string
   shift_end: string
-  work_status_today: 'onsite' | 'telework' | 'leave' | 'off'
+  work_status_today: string
   essential: boolean
   telework_eligible: boolean
   commute_county: string

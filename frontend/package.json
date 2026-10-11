@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "sync:mocks": "node -e \"require('fs').cpSync('../mocks','src/mock-data',{recursive:true,filter:s=>!s.includes('seed')})\"",
+    "sync:mocks": "node -e \"require('fs').cpSync('../mocks','src/mock-data',{recursive:true})\"",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

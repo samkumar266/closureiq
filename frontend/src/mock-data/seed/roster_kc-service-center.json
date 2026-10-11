@@ -1,0 +1,632 @@
+{
+  "employees": [
+    {
+      "employee_id": "e_001",
+      "name": "Marcus Delgado",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "marcus.delgado@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0101"
+        },
+        {
+          "type": "push",
+          "address": "device-e_001"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": null
+    },
+    {
+      "employee_id": "e_002",
+      "name": "Priya Raman",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "Johnson KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "priya.raman@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0102"
+        },
+        {
+          "type": "push",
+          "address": "device-e_002"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_003",
+      "name": "Dana Okafor",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "Clay MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "dana.okafor@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0103"
+        },
+        {
+          "type": "push",
+          "address": "device-e_003"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_004",
+      "name": "Luis Herrera",
+      "group": "essential",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": true,
+      "telework_eligible": false,
+      "commute_county": "Wyandotte KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "luis.herrera@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0104"
+        }
+      ],
+      "comm_needs": [
+        "spanish"
+      ],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_005",
+      "name": "Hannah Brooks",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "hannah.brooks@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0105"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_006",
+      "name": "Tomas Rivera",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Platte MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "tomas.rivera@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0106"
+        }
+      ],
+      "comm_needs": [
+        "spanish"
+      ],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_007",
+      "name": "Mei Lin Zhao",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Johnson KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "mei.lin.zhao@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0107"
+        },
+        {
+          "type": "push",
+          "address": "device-e_007"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_008",
+      "name": "Aaron Whitfield",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "08:30",
+      "shift_end": "16:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Clay MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "aaron.whitfield@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0108"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_009",
+      "name": "Grace Nakamura",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "grace.nakamura@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0109"
+        },
+        {
+          "type": "push",
+          "address": "device-e_009"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_010",
+      "name": "Samuel Obi",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Cass MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "samuel.obi@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0110"
+        }
+      ],
+      "comm_needs": [
+        "large_print"
+      ],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_011",
+      "name": "Jenna Kowalski",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Wyandotte KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "jenna.kowalski@closureiq.example"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_012",
+      "name": "Ravi Patel",
+      "group": "onsite_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "08:30",
+      "shift_end": "16:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Johnson KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "ravi.patel@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0112"
+        },
+        {
+          "type": "push",
+          "address": "device-e_012"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_013",
+      "name": "Beth Calloway",
+      "group": "onsite_not_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "beth.calloway@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0113"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_014",
+      "name": "Omar Haddad",
+      "group": "onsite_not_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Clay MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "omar.haddad@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0114"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_015",
+      "name": "Walt Jenkins",
+      "group": "onsite_not_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:00",
+      "shift_end": "15:30",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Cass MO",
+      "channels": [
+        {
+          "type": "voice",
+          "address": "816-555-0115"
+        },
+        {
+          "type": "email",
+          "address": "walt.jenkins@closureiq.example"
+        }
+      ],
+      "comm_needs": [
+        "voice_call_first"
+      ],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_016",
+      "name": "Alicia Moreno",
+      "group": "onsite_not_telework_eligible",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "scheduled_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "alicia.moreno@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0116"
+        },
+        {
+          "type": "push",
+          "address": "device-e_016"
+        }
+      ],
+      "comm_needs": [
+        "spanish"
+      ],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_017",
+      "name": "Nina Petrov",
+      "group": "already_teleworking",
+      "assignment_type": "remote",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "teleworking",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Platte MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "nina.petrov@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0117"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_018",
+      "name": "Derek Shaw",
+      "group": "already_teleworking",
+      "assignment_type": "remote",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "teleworking",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Johnson KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "derek.shaw@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0118"
+        },
+        {
+          "type": "push",
+          "address": "device-e_018"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_019",
+      "name": "Fatima Rahman",
+      "group": "already_teleworking",
+      "assignment_type": "remote",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "teleworking",
+      "essential": false,
+      "telework_eligible": true,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "fatima.rahman@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0119"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_020",
+      "name": "Colin Murphy",
+      "group": "detail_elsewhere",
+      "assignment_type": "detail",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "on_detail",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Clay MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "colin.murphy@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0120"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_021",
+      "name": "Yara Santos",
+      "group": "detail_elsewhere",
+      "assignment_type": "detail",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "on_detail",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Wyandotte KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "yara.santos@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0121"
+        }
+      ],
+      "comm_needs": [
+        "spanish"
+      ],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_022",
+      "name": "George Bell",
+      "group": "on_leave_or_off",
+      "assignment_type": "onsite",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "on_leave",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "george.bell@closureiq.example"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_023",
+      "name": "Tasha Greene",
+      "group": "on_leave_or_off",
+      "assignment_type": "onsite",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "day_off",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Johnson KS",
+      "channels": [
+        {
+          "type": "email",
+          "address": "tasha.greene@closureiq.example"
+        },
+        {
+          "type": "sms",
+          "address": "816-555-0123"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_024",
+      "name": "Kevin Tran",
+      "group": "contractor",
+      "assignment_type": "contractor",
+      "shift_start": "07:30",
+      "shift_end": "16:00",
+      "work_status_today": "contractor_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Jackson MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "kevin.tran@closureiq.example"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    },
+    {
+      "employee_id": "e_025",
+      "name": "Lena Fischer",
+      "group": "contractor",
+      "assignment_type": "contractor",
+      "shift_start": "08:00",
+      "shift_end": "16:30",
+      "work_status_today": "contractor_onsite",
+      "essential": false,
+      "telework_eligible": false,
+      "commute_county": "Platte MO",
+      "channels": [
+        {
+          "type": "email",
+          "address": "lena.fischer@closureiq.example"
+        }
+      ],
+      "comm_needs": [],
+      "supervisor_id": "e_001"
+    }
+  ]
+}
