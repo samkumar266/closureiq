@@ -44,19 +44,17 @@ async def _stream_chat(
 
     async def consume(event: Any):
         nonlocal audit_failed, whatif_id
-        tool = _tool_event(event)
-        if tool is not None:
+        for tool in _tool_events(event):
             tool_key = json.dumps(tool, sort_keys=True, default=str)
             if tool_key not in seen_tools:
                 seen_tools.add(tool_key)
                 if not _append_stream_audit(store, "agent_tool", tool):
                     audit_failed = True
                 yield _sse("tool", tool)
-        result = _tool_result(event)
-        if result is not None:
+        for result in _tool_results(event):
             tool_results.append(result)
             if result.get("hypothetical") is True:
-                possible = result.get("evaluation_id")
+                possible = result.get("whatif_id") or result.get("evaluation_id")
                 if isinstance(possible, str):
                     whatif_id = possible
         text = _event_text(event)
@@ -168,7 +166,48 @@ def _tool_event(event: Any) -> dict[str, Any] | None:
     if not isinstance(name, str):
         return None
     args = current.get("input", current.get("args", {}))
-    return {"name": name, "args": args if isinstance(args, dict) else {}}
+    if not isinstance(args, dict):
+        return None  # still streaming as a partial JSON string; the finished message reports it
+    return {"name": name, "args": args}
+
+
+def _tool_events(event: Any) -> list[dict[str, Any]]:
+    """Tool calls with complete arguments.
+
+    Strands streams current_tool_use.input as a partial JSON string, so a call is
+    only reported once its input is a dict: either a current_tool_use with a dict
+    input, or the toolUse items of the finished assistant message.
+    """
+    found = []
+    single = _tool_event(event)
+    if single is not None:
+        found.append(single)
+    message = event.get("message") if isinstance(event, dict) else None
+    if isinstance(message, dict) and message.get("role") == "assistant":
+        for item in message.get("content") or []:
+            use = item.get("toolUse") if isinstance(item, dict) else None
+            if isinstance(use, dict) and isinstance(use.get("name"), str):
+                args = use.get("input")
+                found.append({"name": use["name"], "args": args if isinstance(args, dict) else {}})
+    return found
+
+
+def _tool_results(event: Any) -> list[dict[str, Any]]:
+    """Decoded tool results: a top-level tool_result, or the toolResult items of the
+    user-role message Strands appends after running tools."""
+    found = []
+    single = _tool_result(event)
+    if single is not None:
+        found.append(single)
+    message = event.get("message") if isinstance(event, dict) else None
+    if isinstance(message, dict) and message.get("role") == "user":
+        for item in message.get("content") or []:
+            result = item.get("toolResult") if isinstance(item, dict) else None
+            if isinstance(result, dict):
+                decoded = _tool_result({"tool_result": result})
+                if decoded is not None:
+                    found.append(decoded)
+    return found
 
 
 def _tool_result(event: Any) -> dict[str, Any] | None:
@@ -180,6 +219,8 @@ def _tool_result(event: Any) -> dict[str, Any] | None:
     content = result.get("content")
     if isinstance(content, list):
         for item in content:
+            if isinstance(item, dict) and isinstance(item.get("json"), dict):
+                return item["json"]
             if not isinstance(item, dict) or not isinstance(item.get("text"), str):
                 continue
             try:
@@ -188,6 +229,8 @@ def _tool_result(event: Any) -> dict[str, Any] | None:
                 continue
             if isinstance(decoded, dict):
                 return decoded
+            if isinstance(decoded, list):  # e.g. get_thresholds; let the validator see the rows
+                return {"items": decoded}
     return result
 
 
