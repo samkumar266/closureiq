@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { evaluateFacility, getFacilities, setClock, setDataMode } from '../api'
+// DEPRECATED(closureiq): evaluateFacility and getFacilities were only used by the retired Evaluate all button.
+// import { evaluateFacility, getFacilities, setClock, setDataMode } from '../api'
+import { setClock, setDataMode } from '../api'
 import { requestClockRefresh, useServerClock } from '../hooks/useServerClock'
 
 const DEMO_KEY = 'closureiq.demo'
@@ -67,12 +69,15 @@ export function DemoControls() {
       }),
     )
 
-  const evaluateAll = () =>
-    run('Evaluate all', async () => {
-      const { facilities, fromFixture } = await getFacilities()
-      if (fromFixture) throw new Error('backend not connected')
-      await Promise.allSettled(facilities.map((facility) => evaluateFacility(facility.facility_id)))
-    })
+  // DEPRECATED(closureiq) START: multi-facility evaluate; the facility page has its own Re-evaluate button,
+  // and allSettled hid per-facility failures.
+  // const evaluateAll = () =>
+  //   run('Evaluate all', async () => {
+  //     const { facilities, fromFixture } = await getFacilities()
+  //     if (fromFixture) throw new Error('backend not connected')
+  //     await Promise.allSettled(facilities.map((facility) => evaluateFacility(facility.facility_id)))
+  //   })
+  // DEPRECATED(closureiq) END
 
   const buttonClass = (active: boolean) =>
     `rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${
@@ -123,13 +128,14 @@ export function DemoControls() {
           </button>
         </div>
 
-        <button className={buttonClass(false)} disabled={busy} onClick={() => void evaluateAll()} type="button">
-          Evaluate all facilities
-        </button>
-
-        <Link className="text-xs text-slate-300 underline" to="/">
-          Watchlist
-        </Link>
+        {/* DEPRECATED(closureiq) START: Evaluate all and Watchlist link retired with the multi-facility Watchlist. */}
+        {/* <button className={buttonClass(false)} disabled={busy} onClick={() => void evaluateAll()} type="button"> */}
+        {/*   Evaluate all facilities */}
+        {/* </button> */}
+        {/* <Link className="text-xs text-slate-300 underline" to="/"> */}
+        {/*   Watchlist */}
+        {/* </Link> */}
+        {/* DEPRECATED(closureiq) END */}
 
         {message && <span className="text-xs text-slate-300">{message}</span>}
 

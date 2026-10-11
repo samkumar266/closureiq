@@ -23,7 +23,8 @@ type ApprovalDrawerProps = {
   approval: Approval | null
   notificationId: string | null
   timeZone: string
-  offline: boolean
+  // DEPRECATED(closureiq): offline only existed for the fixture fallback; the page shows backend errors itself.
+  // offline: boolean
   // Called after any decision or a stale/already-decided answer, so the page reloads its status.
   onDecided: () => void
 }
@@ -74,7 +75,9 @@ function DecisionSummary({ approval, notificationId, timeZone }: { approval: App
 }
 
 export function ApprovalDrawer(props: ApprovalDrawerProps) {
-  const { open, onClose, recommendation, employees, approval, notificationId, timeZone, offline, onDecided } = props
+  // DEPRECATED(closureiq): offline removed from props.
+  // const { open, onClose, recommendation, employees, approval, notificationId, timeZone, offline, onDecided } = props
+  const { open, onClose, recommendation, employees, approval, notificationId, timeZone, onDecided } = props
   const [actor, setActor] = useState(readSavedActor)
   const [action, setAction] = useState<Action>('approve')
   const [overridePosture, setOverridePosture] = useState<Posture>(
@@ -90,7 +93,9 @@ export function ApprovalDrawer(props: ApprovalDrawerProps) {
   const evaluationId = recommendation.evaluation_id
   const previewPosture = action === 'override' ? overridePosture : undefined
   const previewKey = `${evaluationId}:${previewPosture ?? 'engine'}`
-  const showPreview = open && !approval && !offline && action !== 'reject'
+  // DEPRECATED(closureiq): offline removed from props.
+  // const showPreview = open && !approval && !offline && action !== 'reject'
+  const showPreview = open && !approval && action !== 'reject'
 
   useEffect(() => {
     if (!showPreview) return
@@ -163,11 +168,14 @@ export function ApprovalDrawer(props: ApprovalDrawerProps) {
         <div className="space-y-5 p-5">
           {approval ? (
             <DecisionSummary approval={approval} notificationId={notificationId} timeZone={timeZone} />
-          ) : offline ? (
-            <p className="rounded-md bg-slate-100 p-3 text-sm text-slate-700">
-              The backend is not connected, so decisions cannot be recorded. Start the API to approve.
-            </p>
           ) : (
+            // DEPRECATED(closureiq) START: offline branch for the fixture fallback.
+            // ) : offline ? (
+            //   <p className="rounded-md bg-slate-100 p-3 text-sm text-slate-700">
+            //     The backend is not connected, so decisions cannot be recorded. Start the API to approve.
+            //   </p>
+            // ) : (
+            // DEPRECATED(closureiq) END
             <>
               <label className="block text-sm font-medium text-slate-900">
                 Your name (recorded as the approver)

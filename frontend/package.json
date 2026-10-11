@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "//DEPRECATED(closureiq)": "scripts.sync:mocks removed (copied ../mocks into src/mock-data for the removed sample-data fallback). Was: node -e \"require('fs').cpSync('../mocks','src/mock-data',{recursive:true})\"",
   "scripts": {
-    "sync:mocks": "node -e \"require('fs').cpSync('../mocks','src/mock-data',{recursive:true})\"",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

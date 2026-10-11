@@ -1,35 +1,59 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { acknowledgeDelivery, getEvaluation, getFacilities, getNotification, getRoster, setClock } from '../api'
+// DEPRECATED(closureiq): facility name and timezone now come from the profile endpoint, not the facility list.
+// import { acknowledgeDelivery, getEvaluation, getFacilities, getNotification, getRoster, setClock } from '../api'
+import { acknowledgeDelivery, getEvaluation, getFacilityProfile, getNotification, getRoster, setClock } from '../api'
 import { StatusBadges } from '../components/StatusBadges'
 import { formatDateTime } from '../format'
 import { groupLabel } from '../groups'
 import { useEventSource } from '../hooks/useEventSource'
 import { requestClockRefresh, useServerClock } from '../hooks/useServerClock'
 import { postureTheme } from '../theme'
-import type { Delivery, DeliveryStatus, Employee, Facility, NotificationPackage, Recommendation } from '../types'
+// DEPRECATED(closureiq): Facility list item type retired with the Watchlist.
+// import type { Delivery, DeliveryStatus, Employee, Facility, NotificationPackage, Recommendation } from '../types'
+import type { Delivery, DeliveryStatus, Employee, FacilityProfile, NotificationPackage, Recommendation } from '../types'
+
+// DEPRECATED(closureiq) START: loader that swallowed a failed evaluation lookup and searched the facility list.
+// type TrackerData = {
+//   notification: NotificationPackage
+//   evaluation: Recommendation | null
+//   facility: Facility | null
+//   employees: Employee[]
+// }
+//
+// async function loadTracker(notificationId: string): Promise<TrackerData> {
+//   const notification = await getNotification(notificationId)
+//   const evaluation = await getEvaluation(notification.evaluation_id).catch(() => null)
+//   const facilityId = evaluation?.facility_id
+//   const [facilitiesResult, employees] = await Promise.all([
+//     getFacilities(),
+//     facilityId ? getRoster(facilityId) : Promise.resolve([]),
+//   ])
+//   return {
+//     notification,
+//     evaluation,
+//     facility: facilitiesResult.facilities.find((item) => item.facility_id === facilityId) ?? null,
+//     employees,
+//   }
+// }
+// DEPRECATED(closureiq) END
 
 type TrackerData = {
   notification: NotificationPackage
-  evaluation: Recommendation | null
-  facility: Facility | null
+  evaluation: Recommendation
+  facility: FacilityProfile
   employees: Employee[]
 }
 
+// Any failed call throws, so the page shows the error instead of a partial tracker.
 async function loadTracker(notificationId: string): Promise<TrackerData> {
   const notification = await getNotification(notificationId)
-  const evaluation = await getEvaluation(notification.evaluation_id).catch(() => null)
-  const facilityId = evaluation?.facility_id
-  const [facilitiesResult, employees] = await Promise.all([
-    getFacilities(),
-    facilityId ? getRoster(facilityId) : Promise.resolve([]),
+  const evaluation = await getEvaluation(notification.evaluation_id)
+  const [facility, employees] = await Promise.all([
+    getFacilityProfile(evaluation.facility_id),
+    getRoster(evaluation.facility_id),
   ])
-  return {
-    notification,
-    evaluation,
-    facility: facilitiesResult.facilities.find((item) => item.facility_id === facilityId) ?? null,
-    employees,
-  }
+  return { notification, evaluation, facility, employees }
 }
 
 const statusStyles: Record<DeliveryStatus, string> = {
@@ -65,7 +89,7 @@ export function DeliveryTracker() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState<Set<string>>(new Set())
   const { subscribe, onReconnect } = useEventSource()
-  const { now, clockMode, speed, dataMode } = useServerClock()
+  const { now, clockMode, clockStatus, speed, dataMode } = useServerClock()
 
   const reload = useCallback(
     () =>
@@ -174,8 +198,9 @@ export function DeliveryTracker() {
                 ← {data.facility?.name ?? data.evaluation.facility_id}
               </Link>
             ) : (
+              // DEPRECATED(closureiq): "← Watchlist" label; "/" now opens the demo facility.
               <Link className="text-sm font-medium text-blue-700 hover:underline" to="/">
-                ← Watchlist
+                ← Facility
               </Link>
             )}
             <h1 className="mt-1 text-3xl font-bold tracking-tight">Delivery tracker</h1>
@@ -188,7 +213,9 @@ export function DeliveryTracker() {
           <StatusBadges
             clockMode={clockMode}
             dataMode={dataMode ?? data?.evaluation?.data_mode ?? 'live'}
-            fromFixture={false}
+            clockStatus={clockStatus}
+            // DEPRECATED(closureiq): SAMPLE DATA badge retired with the fixture fallback.
+            // fromFixture={false}
             now={now}
             speed={speed}
           />

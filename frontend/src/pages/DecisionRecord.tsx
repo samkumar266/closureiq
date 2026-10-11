@@ -1,25 +1,40 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getFacilities, getRecord, getRoster, replayEvaluation } from '../api'
+// DEPRECATED(closureiq): facility name and timezone now come from the profile endpoint, not the facility list.
+// import { getFacilities, getRecord, getRoster, replayEvaluation } from '../api'
+import { getFacilityProfile, getRecord, getRoster, replayEvaluation } from '../api'
 import { PackageView } from '../components/approval/PackageView'
 import { EvidencePanel } from '../components/decision/EvidencePanel'
 import { PostureChip } from '../components/PostureChip'
 import { StatusBadges } from '../components/StatusBadges'
 import { formatDateTime } from '../format'
 import { useServerClock } from '../hooks/useServerClock'
-import type { DecisionRecord as RecordData, Employee, Facility, NotificationPackage, ReplayResult } from '../types'
+// DEPRECATED(closureiq): Facility list item type retired with the Watchlist.
+// import type { DecisionRecord as RecordData, Employee, Facility, NotificationPackage, ReplayResult } from '../types'
+import type { DecisionRecord as RecordData, Employee, FacilityProfile, NotificationPackage, ReplayResult } from '../types'
 
-type PageData = { record: RecordData; facility: Facility | null; employees: Employee[] }
+// DEPRECATED(closureiq) START: loader that searched the facility list for name and timezone.
+// type PageData = { record: RecordData; facility: Facility | null; employees: Employee[] }
+//
+// async function loadRecord(evaluationId: string): Promise<PageData> {
+//   const record = await getRecord(evaluationId)
+//   const facilityId = record.evaluation.facility_id
+//   const [facilitiesResult, employees] = await Promise.all([getFacilities(), getRoster(facilityId)])
+//   return {
+//     record,
+//     facility: facilitiesResult.facilities.find((item) => item.facility_id === facilityId) ?? null,
+//     employees,
+//   }
+// }
+// DEPRECATED(closureiq) END
+
+type PageData = { record: RecordData; facility: FacilityProfile; employees: Employee[] }
 
 async function loadRecord(evaluationId: string): Promise<PageData> {
   const record = await getRecord(evaluationId)
   const facilityId = record.evaluation.facility_id
-  const [facilitiesResult, employees] = await Promise.all([getFacilities(), getRoster(facilityId)])
-  return {
-    record,
-    facility: facilitiesResult.facilities.find((item) => item.facility_id === facilityId) ?? null,
-    employees,
-  }
+  const [facility, employees] = await Promise.all([getFacilityProfile(facilityId), getRoster(facilityId)])
+  return { record, facility, employees }
 }
 
 // Saves the whole record as JSON: the artifact a judge can keep (architecture: Export).
@@ -109,7 +124,7 @@ export function DecisionRecord() {
   const { id = '' } = useParams()
   const [data, setData] = useState<PageData | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const { now, clockMode, speed, dataMode } = useServerClock()
+  const { now, clockMode, clockStatus, speed, dataMode } = useServerClock()
 
   useEffect(() => {
     loadRecord(id)
@@ -135,7 +150,9 @@ export function DecisionRecord() {
               className="text-sm font-medium text-blue-700 hover:underline"
               to={evaluation ? `/facilities/${evaluation.facility_id}` : '/'}
             >
-              ← {data?.facility?.name ?? evaluation?.facility_id ?? 'Watchlist'}
+              {/* DEPRECATED(closureiq): 'Watchlist' label; "/" now opens the demo facility. */}
+              {/* ← {data?.facility?.name ?? evaluation?.facility_id ?? 'Watchlist'} */}
+              ← {data?.facility?.name ?? evaluation?.facility_id ?? 'Facility'}
             </Link>
             <h1 className="mt-1 text-3xl font-bold tracking-tight">Decision record</h1>
             <p className="mt-1 text-sm text-slate-600">
@@ -145,7 +162,9 @@ export function DecisionRecord() {
           <StatusBadges
             clockMode={clockMode}
             dataMode={dataMode ?? evaluation?.data_mode ?? 'live'}
-            fromFixture={false}
+            clockStatus={clockStatus}
+            // DEPRECATED(closureiq): SAMPLE DATA badge retired with the fixture fallback.
+            // fromFixture={false}
             now={now}
             speed={speed}
           />

@@ -4,7 +4,8 @@ import { ApiError, streamChat } from '../../api'
 type AskPanelProps = {
   facilityId: string
   evaluationId: string
-  offline: boolean
+  // DEPRECATED(closureiq): offline only existed for the fixture fallback; agentOffline below covers a 503.
+  // offline: boolean
 }
 
 type Turn = {
@@ -26,7 +27,9 @@ const suggestions = [
   'What evidence is missing or stale?',
 ]
 
-export function AskPanel({ facilityId, evaluationId, offline }: AskPanelProps) {
+// DEPRECATED(closureiq): offline prop removed.
+// export function AskPanel({ facilityId, evaluationId, offline }: AskPanelProps) {
+export function AskPanel({ facilityId, evaluationId }: AskPanelProps) {
   const [turns, setTurns] = useState<Turn[]>([])
   const [draft, setDraft] = useState('')
   const [agentOffline, setAgentOffline] = useState(false)
@@ -93,7 +96,9 @@ export function AskPanel({ facilityId, evaluationId, offline }: AskPanelProps) {
         <p className="text-xs text-slate-500">The assistant explains. It cannot change, approve or send anything.</p>
       </div>
 
-      {(offline || agentOffline) && (
+      {/* DEPRECATED(closureiq): offline prop removed. */}
+      {/* {(offline || agentOffline) && ( */}
+      {agentOffline && (
         <p className="mt-3 rounded-md bg-slate-100 p-3 text-sm text-slate-700">
           Agent offline. The recommendation, rationale and approval do not depend on it.
         </p>
@@ -144,7 +149,9 @@ export function AskPanel({ facilityId, evaluationId, offline }: AskPanelProps) {
         {suggestions.map((suggestion) => (
           <button
             className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            disabled={busy || offline}
+            // DEPRECATED(closureiq): offline prop removed.
+            // disabled={busy || offline}
+            disabled={busy}
             key={suggestion}
             onClick={() => void ask(suggestion)}
             type="button"
@@ -164,7 +171,8 @@ export function AskPanel({ facilityId, evaluationId, offline }: AskPanelProps) {
         <input
           aria-label="Your question"
           className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-          disabled={offline}
+          // DEPRECATED(closureiq): offline prop removed.
+          // disabled={offline}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Ask a question or a what-if…"
           value={draft}
@@ -180,7 +188,9 @@ export function AskPanel({ facilityId, evaluationId, offline }: AskPanelProps) {
         ) : (
           <button
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            disabled={!draft.trim() || offline}
+            // DEPRECATED(closureiq): offline prop removed.
+            // disabled={!draft.trim() || offline}
+            disabled={!draft.trim()}
             type="submit"
           >
             Ask

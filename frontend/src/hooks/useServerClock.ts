@@ -27,10 +27,15 @@ export function requestClockRefresh() {
   window.dispatchEvent(new Event(CLOCK_REFRESH_EVENT))
 }
 
+// loading: no answer from /api/clock yet; unavailable: the request failed, so `now` is not the server clock.
+export type ClockStatus = 'loading' | 'ok' | 'unavailable'
+
 // Deadlines and escalation run on the simulated clock (architecture: "Two clocks").
-// Falls back to the browser clock when the API is not running.
+// DEPRECATED(closureiq): the hook no longer silently falls back to browser time; it reports clockStatus instead.
+// // Falls back to the browser clock when the API is not running.
 export function useServerClock() {
   const [anchor, setAnchor] = useState<ClockAnchor>(systemAnchor)
+  const [clockStatus, setClockStatus] = useState<ClockStatus>('loading')
   const [now, setNow] = useState(Date.now)
   const [dataMode, setDataMode] = useState<DataMode | null>(null)
   const { subscribe } = useEventSource()
@@ -39,13 +44,16 @@ export function useServerClock() {
     const nextAnchor = anchorFrom(clock)
     setAnchor(nextAnchor)
     setNow(simNow(nextAnchor))
+    setClockStatus('ok')
   }
 
   useEffect(() => {
     const refresh = () => {
       apiGet<ClockResponse>('/clock')
         .then(applyClock)
-        .catch(() => console.warn('Clock API unavailable; using browser time'))
+        // DEPRECATED(closureiq): replaced by an explicit clockStatus shown on screen.
+        // .catch(() => console.warn('Clock API unavailable; using browser time'))
+        .catch(() => setClockStatus('unavailable'))
       apiGet<HealthResponse>('/health')
         .then((health) => setDataMode(health.data_mode))
         .catch(() => console.warn('Health API unavailable'))
@@ -85,6 +93,7 @@ export function useServerClock() {
 
   return {
     now,
+    clockStatus,
     clockMode: anchor.mode,
     speed: anchor.speed,
     dataMode,

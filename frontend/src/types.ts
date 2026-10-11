@@ -4,9 +4,11 @@ import type { Posture } from './theme'
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 export type DataMode = 'live' | 'replay'
-export type AlertTier = 'none' | 'advisory' | 'watch' | 'warning'
-export type SourceHealth = 'ok' | 'degraded' | 'missing'
-export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'rejected' | 'overridden' | 'unresolved'
+// DEPRECATED(closureiq) START: facility-list enums, used only by the retired Watchlist.
+// export type AlertTier = 'none' | 'advisory' | 'watch' | 'warning'
+// export type SourceHealth = 'ok' | 'degraded' | 'missing'
+// export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'rejected' | 'overridden' | 'unresolved'
+// DEPRECATED(closureiq) END
 
 export type RecommendationInput = {
   id: string
@@ -93,31 +95,52 @@ export type Recommendation = {
   rationale: string
 }
 
-export type Facility = {
+// DEPRECATED(closureiq) START: GET /api/facilities list items, used only by the retired Watchlist.
+// export type Facility = {
+//   facility_id: string
+//   name: string
+//   location: {
+//     lat: number
+//     lon: number
+//     timezone: string
+//   }
+//   highest_alert_tier: AlertTier
+//   // Optional, not yet sent by the backend: the alert behind highest_alert_tier, for the Watchlist card.
+//   top_alert?: { event: string; severity: string | null; certainty: string | null } | null
+//   source_health: SourceHealth
+//   data_mode: DataMode
+//   // null until the backend has evaluated the facility for the first time.
+//   current: FacilityCurrent | null
+// }
+//
+// export type FacilityCurrent = {
+//   evaluation_id: string
+//   posture: Posture
+//   confidence: ConfidenceLevel
+//   evaluated_at: string
+//   decision_deadline: string | null
+//   headline: string
+//   approval_status: ApprovalStatus
+// }
+// DEPRECATED(closureiq) END
+
+// GET /api/facilities/{id} (contract: Facility profile).
+export type FacilityProfile = {
   facility_id: string
   name: string
-  location: {
-    lat: number
-    lon: number
-    timezone: string
-  }
-  highest_alert_tier: AlertTier
-  // Optional, not yet sent by the backend: the alert behind highest_alert_tier, for the Watchlist card.
-  top_alert?: { event: string; severity: string | null; certainty: string | null } | null
-  source_health: SourceHealth
-  data_mode: DataMode
-  // null until the backend has evaluated the facility for the first time.
-  current: FacilityCurrent | null
-}
-
-export type FacilityCurrent = {
-  evaluation_id: string
-  posture: Posture
-  confidence: ConfidenceLevel
-  evaluated_at: string
-  decision_deadline: string | null
-  headline: string
-  approval_status: ApprovalStatus
+  location: { lat: number; lon: number; timezone: string }
+  hours: { open: string; close: string }
+  arrival_window: { start: string; end: string }
+  departure_window: { start: string; end: string }
+  commute_buffer_min: number
+  notification_lead_min: number
+  earliest_departure: string
+  assembly_point: string
+  manager_id: string
+  backup_manager_id: string
+  on_call_id: string
+  gauge: { usgs_site: string; nwps_id: string } | null
+  policy_version: string
 }
 
 export type SourceStatus = {
