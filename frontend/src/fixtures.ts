@@ -3,8 +3,12 @@ import type {
   AlertTier,
   ConfidenceLevel,
   DataMode,
+  Employee,
   Facility,
+  FacilityCurrent,
+  Recommendation,
   SourceHealth,
+  SourceStatus,
 } from './types'
 import type { Posture } from './theme'
 
@@ -12,7 +16,7 @@ type FixtureFacility = Omit<Facility, 'highest_alert_tier' | 'source_health' | '
   highest_alert_tier: string
   source_health: string
   data_mode: string
-  current: Omit<Facility['current'], 'posture' | 'confidence'> & {
+  current: Omit<FacilityCurrent, 'posture' | 'confidence'> & {
     posture: string
     confidence: string
   }
@@ -74,4 +78,51 @@ export const facilities = (facilitiesFixture as FacilitiesFixture).facilities.ma
 
 export function loadFacilities(): Facility[] {
   return structuredClone(facilities)
+}
+
+// Recommendation fixtures, used by the Facility screen while the backend is not running.
+const recommendationModules = import.meta.glob<{ default: unknown }>(
+  ['./mock-data/*.json', '!./mock-data/facilities.json'],
+  { eager: true },
+)
+const recommendations = Object.values(recommendationModules).map((module) => module.default as Recommendation)
+
+const rosterModules = import.meta.glob<{ default: { employees: Employee[] } }>('./mock-data/seed/roster_*.json', {
+  eager: true,
+})
+
+// Picks the facility's current evaluation from facilities.json, else any fixture for that facility.
+export function loadRecommendation(facilityId: string): Recommendation | null {
+  const currentId = facilities.find((facility) => facility.facility_id === facilityId)?.current?.evaluation_id
+  const match =
+    recommendations.find((item) => item.evaluation_id === currentId) ??
+    recommendations.find((item) => item.facility_id === facilityId)
+  return match ? structuredClone(match) : null
+}
+
+export function loadRoster(facilityId: string): Employee[] {
+  const module = rosterModules[`./mock-data/seed/roster_${facilityId}.json`]
+  return module ? structuredClone(module.default.employees) : []
+}
+
+// Fixtures have no source list, so derive one from the inputs and the missing evidence.
+export function sourcesFromRecommendation(recommendation: Recommendation): SourceStatus[] {
+  const missingSources = new Set(recommendation.missing_evidence.map((item) => item.source))
+  const fromInputs = recommendation.inputs.map((input) => ({
+    source: input.source,
+    status: missingSources.has(input.source) ? ('missing' as const) : input.stale ? ('stale' as const) : ('fresh' as const),
+    fetched_at: input.fetched_at,
+    age_seconds: (new Date(recommendation.evaluated_at).getTime() - new Date(input.fetched_at).getTime()) / 1_000,
+    max_age_seconds: 0,
+  }))
+  const withoutInputs = recommendation.missing_evidence
+    .filter((item) => !recommendation.inputs.some((input) => input.source === item.source))
+    .map((item) => ({
+      source: item.source,
+      status: 'missing' as const,
+      fetched_at: null,
+      age_seconds: item.last_good_age_minutes === null ? null : item.last_good_age_minutes * 60,
+      max_age_seconds: item.max_age_minutes * 60,
+    }))
+  return [...fromInputs, ...withoutInputs]
 }
