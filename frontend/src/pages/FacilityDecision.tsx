@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError, evaluateFacility, getFacilities, getFacilityStatus, getRoster } from '../api'
 import type { FacilityStatusResult } from '../api'
+import { ApprovalDrawer } from '../components/approval/ApprovalDrawer'
 import { AffectedEmployees } from '../components/decision/AffectedEmployees'
 import { DegradedBanner } from '../components/decision/DegradedBanner'
 import { EvidencePanel } from '../components/decision/EvidencePanel'
@@ -10,7 +11,7 @@ import { ReasoningPanel } from '../components/decision/ReasoningPanel'
 import { StatusBadges } from '../components/StatusBadges'
 import { useEventSource } from '../hooks/useEventSource'
 import { useServerClock } from '../hooks/useServerClock'
-import type { Employee, Facility } from '../types'
+import type { Approval, Employee, Facility } from '../types'
 
 type PageData = {
   facility: Facility | null
@@ -33,11 +34,49 @@ async function loadPageData(facilityId: string): Promise<PageData> {
   }
 }
 
+type DecisionBarProps = {
+  approval: Approval | null
+  notificationId: string | null
+  onOpen: () => void
+}
+
+// Nothing reaches employees until a person decides; this bar is the way in.
+function DecisionBar({ approval, notificationId, onOpen }: DecisionBarProps) {
+  return (
+    <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm">
+      <p className="text-sm text-slate-700">
+        {approval
+          ? `Decision recorded: ${approval.action} by ${approval.actor}.`
+          : 'Awaiting a decision. Nothing is sent until an approver acts.'}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {notificationId && (
+          <Link
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+            to={`/notifications/${notificationId}`}
+          >
+            Delivery tracker
+          </Link>
+        )}
+        <button
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+          onClick={onOpen}
+          type="button"
+        >
+          {approval ? 'View decision' : 'Review and decide'}
+        </button>
+      </div>
+    </section>
+  )
+}
+
 export function FacilityDecision() {
   const { id = '' } = useParams()
   const [data, setData] = useState<PageData | null>(null)
   const [evaluating, setEvaluating] = useState(false)
   const [evaluateError, setEvaluateError] = useState<string | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
   const { subscribe, onReconnect } = useEventSource()
   const { now, clockMode, speed, dataMode: serverDataMode } = useServerClock()
 
@@ -87,6 +126,7 @@ export function FacilityDecision() {
 
   const facility = data?.facility
   const recommendation = data?.status?.evaluation ?? null
+  const approval = data?.status?.approval ?? null
   const timeZone = facility?.location.timezone ?? 'America/Chicago'
   const dataMode = serverDataMode ?? recommendation?.data_mode ?? facility?.data_mode ?? 'live'
 
@@ -137,6 +177,22 @@ export function FacilityDecision() {
           <>
             <DegradedBanner recommendation={recommendation} sources={data.status?.sources ?? []} />
             <PostureBanner now={now} recommendation={recommendation} timeZone={timeZone} />
+            <DecisionBar
+              approval={approval}
+              notificationId={data.status?.notification_id ?? null}
+              onOpen={() => setDrawerOpen(true)}
+            />
+            <ApprovalDrawer
+              approval={approval}
+              employees={data.employees}
+              notificationId={data.status?.notification_id ?? null}
+              offline={data.fromFixture}
+              onClose={closeDrawer}
+              onDecided={() => void reload()}
+              open={drawerOpen}
+              recommendation={recommendation}
+              timeZone={timeZone}
+            />
             <div className="grid gap-6 lg:grid-cols-2">
               <EvidencePanel recommendation={recommendation} timeZone={timeZone} />
               <ReasoningPanel recommendation={recommendation} />

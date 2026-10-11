@@ -1,17 +1,33 @@
 import { loadFacilities, loadRecommendation, loadRoster, sourcesFromRecommendation } from './fixtures'
-import type { ConfidenceLevel, Employee, Facility, FacilityStatus, Recommendation } from './types'
+import type { Posture } from './theme'
+import type {
+  ApprovalResponse,
+  ConfidenceLevel,
+  DataMode,
+  DecisionRecord,
+  Delivery,
+  Employee,
+  Facility,
+  FacilityStatus,
+  NotificationPackage,
+  Recommendation,
+  ReplayResult,
+} from './types'
 
 // Error shape from docs/contract.md: { error: { code, message, detail } }
 export class ApiError extends Error {
   status: number
   code: string
   detail: Record<string, unknown>
+  // Full response body. 409 already_decided carries the existing approval next to the error.
+  body: unknown
 
-  constructor(status: number, code: string, message: string, detail: Record<string, unknown> = {}) {
+  constructor(status: number, code: string, message: string, detail: Record<string, unknown> = {}, body: unknown = null) {
     super(message)
     this.status = status
     this.code = code
     this.detail = detail
+    this.body = body
   }
 }
 
@@ -35,6 +51,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       error?.code ?? 'http_error',
       error?.message ?? `Request failed with status ${response.status}`,
       error?.detail ?? {},
+      body,
     )
   }
   return body as T
@@ -113,4 +130,51 @@ export async function getRoster(facilityId: string): Promise<Employee[]> {
 
 export function evaluateFacility(facilityId: string) {
   return apiPost<Recommendation>(`/facilities/${facilityId}/evaluate`)
+}
+
+export function getPackagePreview(evaluationId: string, posture?: Posture) {
+  const query = posture ? `?posture=${posture}` : ''
+  return apiGet<NotificationPackage>(`/evaluations/${evaluationId}/package-preview${query}`)
+}
+
+export function approveEvaluation(evaluationId: string, actor: string) {
+  return apiPost<ApprovalResponse>(`/evaluations/${evaluationId}/approve`, { actor })
+}
+
+export function rejectEvaluation(evaluationId: string, actor: string, reason: string) {
+  return apiPost<ApprovalResponse>(`/evaluations/${evaluationId}/reject`, { actor, reason })
+}
+
+export function overrideEvaluation(evaluationId: string, actor: string, posture: Posture, reason: string) {
+  return apiPost<ApprovalResponse>(`/evaluations/${evaluationId}/override`, { actor, posture, reason })
+}
+
+export function getNotification(notificationId: string) {
+  return apiGet<NotificationPackage>(`/notifications/${notificationId}`)
+}
+
+export function acknowledgeDelivery(deliveryId: string) {
+  return apiPost<Delivery>(`/deliveries/${deliveryId}/ack`)
+}
+
+export function getEvaluation(evaluationId: string) {
+  return apiGet<Recommendation>(`/evaluations/${evaluationId}`)
+}
+
+export function getRecord(evaluationId: string) {
+  return apiGet<DecisionRecord>(`/evaluations/${evaluationId}/record`)
+}
+
+export function replayEvaluation(evaluationId: string) {
+  return apiPost<ReplayResult>(`/evaluations/${evaluationId}/replay`)
+}
+
+export function setDataMode(dataMode: DataMode) {
+  return apiPost<{ data_mode: DataMode }>('/mode', { data_mode: dataMode })
+}
+
+export type ClockSettings = { mode: 'system' | 'simulated'; speed: number; set_to?: string | null }
+
+export function setClock(settings: ClockSettings) {
+  return apiPost<{ mode: string; now_sim: string; now_wall: string; speed: number }>('/clock', settings)
 }

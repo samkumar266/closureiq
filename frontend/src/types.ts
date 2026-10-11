@@ -134,6 +134,7 @@ export type Approval = {
   actor: string
   reason: string | null
   acted_at_wall: string
+  acted_at_sim?: string
 }
 
 export type FacilityStatus = {
@@ -167,7 +168,8 @@ export type Employee = {
   essential: boolean
   telework_eligible: boolean
   commute_county: string
-  channels: { type: ChannelType; address: string }[]
+  // Contract: objects. The backend roster currently sends plain channel names.
+  channels: ({ type: ChannelType; address: string } | string)[]
   comm_needs: string[]
   supervisor_id: string | null
 }
@@ -180,7 +182,8 @@ export type ApprovalResponse = {
 export type PackageRecipient = {
   employee_id: string
   included: boolean
-  group: EmployeeGroup
+  // string, not EmployeeGroup: the backend also sends detail_in.
+  group: string
   reason: string
   message_id?: string
   channel_plan?: ChannelType[]
@@ -215,7 +218,7 @@ export type NotificationPackage = {
   next_update: string | null
   package: {
     recipients: PackageRecipient[]
-    messages: { id: string; group: EmployeeGroup; text: string }[]
+    messages: { id: string; group: string; text: string }[]
   }
   deliveries: Delivery[]
   escalation: EscalationStep[]
