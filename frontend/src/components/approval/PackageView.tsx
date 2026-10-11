@@ -9,6 +9,7 @@ type PackageViewProps = {
 // Who is told what and why: included and excluded people with reasons, messages and channel routing.
 export function PackageView({ notification, employees }: PackageViewProps) {
   const { recipients, messages } = notification.package
+  const warnings = notification.package.warnings ?? []
   const nameOf = (employeeId: string) =>
     employees.find((employee) => employee.employee_id === employeeId)?.name ?? employeeId
   const included = recipients.filter((recipient) => recipient.included)
@@ -20,6 +21,20 @@ export function PackageView({ notification, employees }: PackageViewProps) {
         <strong>{included.length}</strong> people will be notified and <strong>{excluded.length}</strong> are excluded.
         Only email can really send; every other channel is simulated.
       </p>
+
+      {warnings.length > 0 && (
+        <section className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3" role="alert">
+          <h3 className="font-bold text-amber-900">Check before sending ({warnings.length})</h3>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-900">
+            {warnings.map((warning, index) => (
+              <li key={`${warning.type}-${warning.message_id ?? index}`}>
+                {warning.text}
+                {warning.employee_ids.length > 0 && <> ({warning.employee_ids.map(nameOf).join(', ')})</>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h3 className="font-bold text-slate-950">Drafted messages</h3>
@@ -33,8 +48,18 @@ export function PackageView({ notification, employees }: PackageViewProps) {
                 <li className="rounded-lg border border-slate-200 bg-slate-50 p-3" key={message.id}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     {groupLabel(message.group)} · {count} {count === 1 ? 'person' : 'people'}
+                    {message.variant && message.variant !== 'standard' && (
+                      <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 normal-case text-slate-700">
+                        {message.variant === 'spanish' ? 'Spanish' : 'Large print'}
+                      </span>
+                    )}
+                    {message.needs_translation && (
+                      <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 normal-case text-red-800">
+                        Needs translation: English shown
+                      </span>
+                    )}
                   </p>
-                  <p className="mt-1 text-sm text-slate-800">{message.text}</p>
+                  <p className="mt-1 whitespace-pre-line text-sm text-slate-800">{message.text}</p>
                 </li>
               )
             })}

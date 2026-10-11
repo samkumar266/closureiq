@@ -210,6 +210,23 @@ export type EscalationStep = {
 }
 
 // Same shape for GET /package-preview (preview: true) and GET /api/notifications/{id}.
+export type PackageMessage = {
+  id: string
+  group: string
+  text: string
+  variant?: 'standard' | 'large_print' | 'spanish'
+  needs_translation?: boolean
+}
+
+export type PackageWarning = {
+  type: 'needs_translation' | 'missing_parameters' | 'derived_parameters'
+  message_id: string | null
+  group: string | null
+  variant: string | null
+  employee_ids: string[]
+  text: string
+}
+
 export type NotificationPackage = {
   notification_id: string | null
   evaluation_id: string
@@ -220,7 +237,9 @@ export type NotificationPackage = {
   next_update: string | null
   package: {
     recipients: PackageRecipient[]
-    messages: { id: string; group: string; text: string }[]
+    messages: PackageMessage[]
+    // Added to the contract by notify: problems the approver must see before approving.
+    warnings?: PackageWarning[]
   }
   deliveries: Delivery[]
   escalation: EscalationStep[]
