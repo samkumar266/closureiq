@@ -209,6 +209,7 @@ export function FacilityDecision() {
             {/* DEPRECATED(closureiq) END */}
             <StatusBadges
               clockMode={clockMode}
+              timeZone={facility?.location.timezone}
               clockStatus={clockStatus}
               dataMode={dataMode}
               // DEPRECATED(closureiq): SAMPLE DATA badge retired with the fixture fallback.

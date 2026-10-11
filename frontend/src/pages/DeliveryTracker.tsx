@@ -212,6 +212,7 @@ export function DeliveryTracker() {
           </div>
           <StatusBadges
             clockMode={clockMode}
+            timeZone={data?.facility?.location.timezone}
             dataMode={dataMode ?? data?.evaluation?.data_mode ?? 'live'}
             clockStatus={clockStatus}
             // DEPRECATED(closureiq): SAMPLE DATA badge retired with the fixture fallback.

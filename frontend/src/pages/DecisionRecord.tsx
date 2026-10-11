@@ -163,6 +163,7 @@ export function DecisionRecord() {
           </div>
           <StatusBadges
             clockMode={clockMode}
+            timeZone={data?.facility?.location.timezone}
             dataMode={dataMode ?? evaluation?.data_mode ?? 'live'}
             clockStatus={clockStatus}
             // DEPRECATED(closureiq): SAMPLE DATA badge retired with the fixture fallback.

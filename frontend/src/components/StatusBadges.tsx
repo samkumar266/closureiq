@@ -9,10 +9,13 @@ type StatusBadgesProps = {
   clockMode: ClockMode
   clockStatus: ClockStatus
   speed: number
+  // The facility's IANA timezone, so the header clock matches every other time on the page.
+  // Undefined until the facility profile has loaded; the clock waits rather than guessing a timezone.
+  timeZone: string | undefined
 }
 
 // Data mode and clock badges. Shown on every screen so replay data or a missing server clock is never hidden.
-export function StatusBadges({ dataMode, now, clockMode, clockStatus, speed }: StatusBadgesProps) {
+export function StatusBadges({ dataMode, now, clockMode, clockStatus, speed, timeZone }: StatusBadgesProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       {/* DEPRECATED(closureiq) START: SAMPLE DATA badge for the removed fixture fallback. */}
@@ -31,7 +34,11 @@ export function StatusBadges({ dataMode, now, clockMode, clockStatus, speed }: S
         <span className="rounded-full bg-red-600 px-3 py-1 text-sm font-bold text-white">CLOCK UNAVAILABLE</span>
       ) : (
         <time aria-label="Current time" className="font-mono text-sm text-slate-700">
-          {clockStatus === 'loading' ? '--:--:--' : new Date(now).toLocaleTimeString([], { timeZoneName: 'short' })}
+          {/* DEPRECATED(closureiq): browser timezone; the clock now shows the facility's local time. */}
+          {/* {clockStatus === 'loading' ? '--:--:--' : new Date(now).toLocaleTimeString([], { timeZoneName: 'short' })} */}
+          {clockStatus === 'loading' || !timeZone
+            ? '--:--:--'
+            : new Date(now).toLocaleTimeString([], { timeZone, timeZoneName: 'short' })}
         </time>
       )}
       {clockMode === 'simulated' && (
