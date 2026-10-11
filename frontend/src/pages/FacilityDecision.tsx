@@ -302,7 +302,11 @@ export function FacilityDecision() {
               <>
                 <div className="grid gap-6 lg:grid-cols-2">
                   {/* DEPRECATED(closureiq): <EvidencePanel recommendation={recommendation} timeZone={timeZone} /> */}
-                  <EvidenceSummary recommendation={recommendation} timeZone={timeZone} />
+                  <EvidenceSummary
+                    recommendation={recommendation}
+                    recordHref={`/records/${recommendation.evaluation_id}`}
+                    timeZone={timeZone}
+                  />
                   <ReasoningPanel recommendation={recommendation} />
                 </div>
                 {/* DEPRECATED(closureiq): offline prop removed with the fixture fallback. */}
@@ -319,11 +323,13 @@ export function FacilityDecision() {
                 />
               </>
             )}
-            <p className="text-sm">
-              <Link className="font-medium text-blue-700 hover:underline" to={`/records/${recommendation.evaluation_id}`}>
-                View the decision record for {recommendation.evaluation_id} →
-              </Link>
-            </p>
+            {/* DEPRECATED(closureiq) START: footer text link; the record is now a button in "What drove this recommendation". */}
+            {/* <p className="text-sm"> */}
+            {/*   <Link className="font-medium text-blue-700 hover:underline" to={`/records/${recommendation.evaluation_id}`}> */}
+            {/*     View the decision record for {recommendation.evaluation_id} → */}
+            {/*   </Link> */}
+            {/* </p> */}
+            {/* DEPRECATED(closureiq) END */}
           </>
         )}
       </div>

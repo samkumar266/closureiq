@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { alertsFrom, alertTier, findInput, tierRank } from '../../alerts'
 import { formatNumber, formatTime } from '../../format'
 import { thresholdName } from '../../thresholds'
@@ -6,6 +7,8 @@ import type { Recommendation, RecommendationInput, ThresholdCrossed, ThresholdNo
 type EvidenceSummaryProps = {
   recommendation: Recommendation
   timeZone: string
+  // Link to the stored evidence and logs (the decision record). Omitted on the record page itself.
+  recordHref?: string
 }
 
 const ALERT_CHECKS = new Set(['T1', 'T2', 'T3'])
@@ -50,7 +53,7 @@ function Check({ ok, title, detail, tooltip }: { ok: boolean; title: string; det
   )
 }
 
-export function EvidenceSummary({ recommendation, timeZone }: EvidenceSummaryProps) {
+export function EvidenceSummary({ recommendation, timeZone, recordHref }: EvidenceSummaryProps) {
   const inputById = (id: string) => recommendation.inputs.find((input) => input.id === id)
   const alertsInput = findInput(recommendation, 'alert')
   const alerts = alertsFrom(alertsInput).sort((a, b) => tierRank[alertTier(a)] - tierRank[alertTier(b)])
@@ -66,7 +69,18 @@ export function EvidenceSummary({ recommendation, timeZone }: EvidenceSummaryPro
 
   return (
     <section aria-label="Evidence" className="rounded-xl bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-bold text-slate-950">What drove this recommendation</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-slate-950">What drove this recommendation</h2>
+        {recordHref && (
+          <Link
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+            title="Stored raw evidence, evaluation chain, decision and replay"
+            to={recordHref}
+          >
+            Evidence log &amp; replay →
+          </Link>
+        )}
+      </div>
 
       {drivingAlert ? (
         <div className="mt-3 rounded-lg border border-slate-200 p-3">

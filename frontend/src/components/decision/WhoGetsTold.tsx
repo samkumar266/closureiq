@@ -152,6 +152,22 @@ function groupsIn(people: Employee[]): [string, Employee[]][] {
 
 type PackageMessage = NotificationPackage['package']['messages'][number]
 
+// "First contact: email 7 · voice 1, then sms, push": how a group is reached, without implying that
+// one person's channel order applies to everyone. A failed channel moves to the person's next one.
+function channelSummary(plans: string[][]) {
+  const first = new Map<string, number>()
+  const backups: string[] = []
+  for (const plan of plans) {
+    if (plan[0]) first.set(plan[0], (first.get(plan[0]) ?? 0) + 1)
+    for (const channel of plan.slice(1)) if (!backups.includes(channel)) backups.push(channel)
+  }
+  const firstText = [...first.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([channel, count]) => `${channel} ${count}`)
+    .join(' · ')
+  return `First contact: ${firstText || 'none'}${backups.length ? `, then ${backups.join(', ')}` : ''}`
+}
+
 type GroupRowProps = {
   group: string
   members: Employee[]
@@ -191,7 +207,9 @@ function GroupRow({ group, members, recipients, messages, timing, nowMinutes, co
         <p className="mt-1 text-slate-700">
           <span className="font-medium">Told: </span>
           {standard ? (whatToDo(standard.text) ?? 'see message') : 'message pending'}
-          <span className="text-slate-500"> · {(first?.channel_plan ?? []).join(' → ')}</span>
+          {/* DEPRECATED(closureiq): showed the first person's channel order as if it applied to the whole group. */}
+          {/* <span className="text-slate-500"> · {(first?.channel_plan ?? []).join(' → ')}</span> */}
+          <span className="text-slate-500"> · {channelSummary(included.map((member) => recipients.get(member.employee_id)?.channel_plan ?? []))}</span>
           {spanish > 0 && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">{spanish} Spanish</span>}
           {largePrint > 0 && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">{largePrint} large print</span>}
         </p>
