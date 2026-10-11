@@ -553,7 +553,8 @@ def get_notification(notification_id: str, request: Request):
             "channel": delivery["channel"], "real": delivery["real"],
             "status": delivery["status"], "status_at_wall": _local_iso(delivery["status_at_wall"], timezone_name),
         })
-    record["escalation"] = notify_wiring.escalation_for(store_from_request(request), record["evaluation_id"], timezone_name)
+    record["escalation"] = notify_wiring.escalation_for(store_from_request(request), record["evaluation_id"], timezone_name,
+                                                      notification_id=record["id"])
     return {
         "notification_id": record["id"], "evaluation_id": record["evaluation_id"],
         "approval_id": record["approval_id"], "standing_policy": record["standing_policy"],

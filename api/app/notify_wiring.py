@@ -165,6 +165,10 @@ def run_due_timers(store, evaluation_lookup) -> list[tuple[str, dict]]:
     return events
 
 
-def escalation_for(store, evaluation_id: str, tz_name: str) -> list[dict]:
-    """Contract escalation[] for GET /api/notifications/{id}."""
-    return escalation.escalation_view(store.list_timers(evaluation_id), tz_name)
+def escalation_for(store, evaluation_id: str, tz_name: str, notification_id: str | None = None) -> list[dict]:
+    """Contract escalation[] for GET /api/notifications/{id}: this notification's timers
+    plus the evaluation's manager-response chain (which has no notification_id)."""
+    rows = store.list_timers(evaluation_id)
+    if notification_id:
+        rows = [r for r in rows if r["payload"].get("notification_id") in (None, notification_id)]
+    return escalation.escalation_view(rows, tz_name)
