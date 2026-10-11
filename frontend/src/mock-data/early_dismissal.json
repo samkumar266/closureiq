@@ -1,0 +1,125 @@
+{
+  "hypothetical": false,
+  "evaluation_id": "eval_0044",
+  "supersedes": "eval_0043",
+  "facility_id": "stl-service-center",
+  "evaluated_at": "2026-10-13T12:10:00-05:00",
+  "policy_version": "policy-2026-10-10.1",
+  "data_mode": "live",
+  "posture": "early_dismissal",
+  "raw_posture": "early_dismissal",
+  "held_by_hysteresis": false,
+  "parameters": {
+    "dismiss_at": "2026-10-13T15:15:00-05:00",
+    "next_update": "2026-10-13T12:25:00-05:00"
+  },
+  "safety_instruction": null,
+  "decision_deadline": "2026-10-13T13:45:00-05:00",
+  "confidence": {
+    "level": "high",
+    "reasons": [
+      "all sources fresh",
+      "certainty Likely",
+      "onset under 12 h away"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "in_1",
+      "role": "drove",
+      "source": "NWS alert",
+      "label": "High Wind Warning",
+      "value": {
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Expected"
+      },
+      "onset": "2026-10-13T16:00:00-05:00",
+      "ends": "2026-10-13T22:00:00-05:00",
+      "fetched_at": "2026-10-13T12:09:20-05:00",
+      "snapshot_id": "snap_0446",
+      "stale": false
+    },
+    {
+      "id": "in_2",
+      "role": "drove",
+      "source": "NWS forecast grid",
+      "label": "Forecast peak wind gust",
+      "value": 62,
+      "unit": "mph",
+      "fetched_at": "2026-10-13T12:00:04-05:00",
+      "snapshot_id": "snap_0447",
+      "stale": false
+    },
+    {
+      "id": "in_3",
+      "role": "drove",
+      "source": "NWS forecast grid",
+      "label": "Forecast sustained wind, peak hour",
+      "value": 44,
+      "unit": "mph",
+      "fetched_at": "2026-10-13T12:00:04-05:00",
+      "snapshot_id": "snap_0447",
+      "stale": false
+    }
+  ],
+  "thresholds_crossed": [
+    {
+      "id": "T1",
+      "input_id": "in_1",
+      "cutoff": "Warning",
+      "actual": "Warning"
+    },
+    {
+      "id": "T2",
+      "input_id": "in_1",
+      "cutoff": "Severe or Extreme",
+      "actual": "Severe"
+    },
+    {
+      "id": "T3",
+      "input_id": "in_1",
+      "cutoff": "Likely or Observed",
+      "actual": "Likely"
+    },
+    {
+      "id": "T4",
+      "input_id": "in_2",
+      "cutoff": 58,
+      "actual": 62,
+      "unit": "mph",
+      "margin": 4,
+      "anchor": "NWS Kansas City/Pleasant Hill and St. Louis: Severe Thunderstorm Warning for wind gusts of 58 mph (50 kt) or greater; High Wind Warning for gusts of 58 mph or greater.",
+      "anchor_url": "https://www.weather.gov/eax/eaxwwacriteria"
+    },
+    {
+      "id": "T5",
+      "input_id": "in_3",
+      "cutoff": 40,
+      "actual": 44,
+      "unit": "mph",
+      "margin": 4,
+      "anchor": "NWS Kansas City/Pleasant Hill and St. Louis: High Wind Warning for sustained winds of 40 mph or greater for one hour.",
+      "anchor_url": "https://www.weather.gov/eax/eaxwwacriteria"
+    }
+  ],
+  "thresholds_not_crossed": [],
+  "missing_evidence": [],
+  "flip_list": [
+    {
+      "change": "Forecast gust falls below 58 mph and sustained wind below 40 mph",
+      "resulting_posture": "unscheduled_leave_or_telework"
+    },
+    {
+      "change": "Warning is downgraded to a Watch",
+      "resulting_posture": "normal_operations",
+      "note": "elevated monitoring, re-evaluate in 60 min"
+    },
+    {
+      "change": "Hazard onset moves after 16:30, outside the departure window",
+      "resulting_posture": "normal_operations",
+      "note": "with a shelter-in-place safety instruction until the hazard ends"
+    }
+  ],
+  "rationale": "Recommend early dismissal at 3:15 PM on October 13. A High Wind Warning (severity Severe, certainty Likely) runs from 4:00 to 10:00 PM and overlaps the departure window. Forecast gusts of 62 mph exceed the 58 mph cutoff by 4 mph, and forecast sustained wind of 44 mph exceeds the 40 mph cutoff by 4 mph. Dismissal at 3:15 PM gives employees 45 minutes before the hazard starts. Confidence is high. A decision is needed by 1:45 PM."
+}

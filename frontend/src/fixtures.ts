@@ -1,4 +1,4 @@
-import facilitiesFixture from '../../mocks/facilities.json'
+import facilitiesFixture from './mock-data/facilities.json'
 import type {
   AlertTier,
   ConfidenceLevel,
