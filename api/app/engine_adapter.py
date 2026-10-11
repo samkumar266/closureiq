@@ -245,7 +245,10 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
         else:
             posture = "normal_operations"
         if tier == "warning" and onset <= now + timedelta(minutes=30):
-            safety_instruction = "Follow official NWS instructions; seek appropriate shelter if directed."
+            # Generic advice only when the engine has not already set a real
+            # "Shelter in place" instruction (that line must reach the record).
+            if safety_instruction is None:
+                safety_instruction = "Follow official NWS instructions; seek appropriate shelter if directed."
             decision_needed = True
         if posture == "normal_operations" and tier == "watch":
             headline = f"Watch active: {headline}"
