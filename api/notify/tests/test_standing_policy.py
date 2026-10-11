@@ -19,7 +19,8 @@ def test_triggers(closure_eval):
     assert should_auto_send(tornado(closure_eval, label="Severe Thunderstorm Warning"), NOW)  # onset in 10 min
     assert not should_auto_send(tornado(closure_eval, onset="2026-10-16T15:00:00-05:00",
                                         label="Severe Thunderstorm Warning"), NOW)
-    assert should_auto_send(dict(closure_eval, safety_instruction="Shelter in place until 14:00"), NOW)
+    # an instruction alone never sends (the flood warning in closure.json started hours ago)
+    assert not should_auto_send(dict(closure_eval, safety_instruction="Shelter in place until 14:00"), NOW)
     assert not should_auto_send(closure_eval, "2026-10-15T20:30:00-05:00")  # plain flood warning, onset hours away
     assert not should_auto_send(dict(tornado(closure_eval), hypothetical=True), NOW)
 
@@ -57,8 +58,10 @@ def test_generic_shelter_advice_does_not_auto_send(closure_eval):
     # Real engine text seen live on a Flash Flood Warning (Aiken SC, 2026-10-10).
     ev = dict(closure_eval, safety_instruction="Follow official NWS instructions; seek appropriate shelter if directed.")
     assert not should_auto_send(ev, "2026-10-15T20:30:00-05:00")
+    # Live case, Aiken SC: flash flood warning under way for 40 min plus a real
+    # "Shelter in place" line. Not a standing-policy case: it waits for approval.
     ev = dict(closure_eval, safety_instruction="Shelter in place and follow official instructions.")
-    assert should_auto_send(ev, "2026-10-15T20:30:00-05:00")
+    assert not should_auto_send(ev, "2026-10-15T20:30:00-05:00")
 
 
 def test_live_alert_list_shape(closure_eval):

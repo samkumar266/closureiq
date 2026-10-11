@@ -1,7 +1,7 @@
 """Shelter-in-place standing policy: the only notice sent without approval.
 
-Allowed only for a Tornado Warning, any Warning with onset within 30 minutes,
-or an engine safety_instruction that says shelter in place. The record shows
+Allowed only for a Tornado Warning or any Warning with onset within the next
+30 minutes. An engine safety_instruction alone does not send. The record shows
 approval_id = null and standing_policy = "shelter_in_place", and the approver
 is told straight away.
 """
@@ -41,15 +41,16 @@ def _event_names(alert_input: dict) -> list[str]:
 
 
 def should_auto_send(evaluation: dict, now_sim: datetime | str) -> bool:
-    """True when the shelter-in-place standing policy applies.
+    """True when the shelter-in-place standing policy applies (architecture doc):
+    a Tornado Warning that is active or imminent, or any Warning whose onset is
+    within the next 30 minutes.
 
-    Only the explicit phrase "shelter in place" counts. Generic advice such as
-    "seek appropriate shelter if directed" must never trigger an automatic send.
+    A safety_instruction alone never sends: the engine also adds "Shelter in
+    place" for warnings that are already under way (a flash flood, for example),
+    and those wait for a person like every other posture.
     """
     if evaluation.get("hypothetical"):
         return False  # a what-if can never send anything
-    if "shelter in place" in str(evaluation.get("safety_instruction") or "").lower().replace("-", " "):
-        return True
     now = parse_iso(now_sim)
     for alert in _alert_inputs(evaluation):
         names = _event_names(alert)
@@ -57,8 +58,7 @@ def should_auto_send(evaluation: dict, now_sim: datetime | str) -> bool:
             continue
         if any(n.startswith("Tornado Warning") for n in names):
             return True
-        label = str(alert.get("label", ""))
-        if not label.endswith("Warning"):
+        if not any(n.endswith("Warning") for n in names):
             continue
         onset = alert.get("onset")
         if onset and now <= parse_iso(onset) <= now + timedelta(minutes=IMMINENT_ONSET_MINUTES):

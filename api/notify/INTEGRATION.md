@@ -19,7 +19,7 @@ Owner of `api/notify` and `api/clock.py`: Suraj. Owner of the code this touches 
 | `escalation.fire_due(timers, now_sim, ctx, next_id, on_fire=None)` | pending timer rows; `ctx = {"evaluation", "roster", "recipient_status_at"}` | `(fired_rows, new_rows, actions)`. Fires in (due, id) order. `on_fire(timer, action)` runs after each one |
 | `escalation.cancel_on_decision(timers, evaluation_id, now_sim)` | | Rows it cancelled |
 | `escalation.escalation_view(timers, tz_name)` | timer rows | Contract `escalation[]`: `{step, label, due_sim, fired_at_sim}` |
-| `standing_policy.should_auto_send(evaluation, now_sim)` | | `True` for a Tornado Warning, a Warning with onset in the next 30 min, or a `safety_instruction` mentioning shelter |
+| `standing_policy.should_auto_send(evaluation, now_sim)` | | `True` only for a Tornado Warning (active or imminent) or a Warning with onset in the next 30 min. A `safety_instruction` alone never sends |
 | `email_sender.send_email(subject, text)` | | `{ok, mode: "resend" \| "log_only", provider_ref, error}`. Never raises. Always sends to `DEMO_EMAIL_TO` |
 | `simulator.recipient_status_from_deliveries(rows)` | stored delivery rows | `{employee_id: acknowledged \| delivered \| unreachable \| pending}` |
 | `api/clock.py`: `SystemClock`, `SimulatedClock`, `clock_from_config(store.clock_config())` | | Same math and the same `{mode, now_sim, now_wall, speed}` shape as your store clock. Use `clock.jump(30)` if you ever want a server-side jump |
