@@ -26,7 +26,8 @@ _RANGE = re.compile(
     re.I,
 )
 _TIME = re.compile(
-    r"\b(?P<hour>\d{1,2}):(?P<minute>\d{2})(?:\s*(?P<ampm>AM|PM))?\b", re.I
+    r"\b(?P<hour>\d{1,2})(?:(?::(?P<minute>\d{2}))?\s*(?P<ampm>AM|PM)|:(?P<minute24>\d{2}))\b",
+    re.I,
 )
 _ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _MONTH_DATE = re.compile(
@@ -70,7 +71,10 @@ def build_chat_agent(
     @tool
     def get_evidence(snapshot_id: str) -> dict[str, Any]:
         """Read one stored evidence snapshot by snapshot ID."""
-        item = audit.get_evidence_snapshot(snapshot_id)
+        authorized = {
+            item.snapshot_id: item for item in audit.get_evidence(base.evaluation_id)
+        }
+        item = authorized.get(snapshot_id)
         if item is None:
             raise ValueError("evidence snapshot was not found")
         return _alert_safe(item.model_dump(mode="json"))
@@ -230,6 +234,9 @@ def _collect_facts(
             try:
                 parsed = datetime.fromisoformat(value)
             except ValueError:
+                plain_time = _plain_time(value)
+                if plain_time is not None:
+                    times.add(plain_time)
                 return
             local = parsed.astimezone(local_zone) if parsed.tzinfo else parsed.replace(tzinfo=local_zone)
             dates.add(local.date().isoformat())
@@ -267,7 +274,11 @@ def _time_supported(raw: str, candidates: set[str], zone: ZoneInfo) -> bool:
     if not match:
         return False
     hour = int(match.group("hour"))
-    minute = int(match.group("minute"))
+    minute_text = match.group("minute") or match.group("minute24")
+    if minute_text is None:
+        minute = 0
+    else:
+        minute = int(minute_text)
     ampm = match.group("ampm")
     if ampm:
         if hour < 1 or hour > 12:
@@ -280,6 +291,28 @@ def _time_supported(raw: str, candidates: set[str], zone: ZoneInfo) -> bool:
     if minute > 59:
         return False
     return f"{hour:02d}:{minute:02d}" in candidates
+
+
+def _plain_time(value: str) -> str | None:
+    """Normalize a local-time-only tool value without applying a date or offset."""
+    match = _TIME.fullmatch(value.strip())
+    if not match:
+        return None
+    hour = int(match.group("hour"))
+    minute_text = match.group("minute") or match.group("minute24")
+    minute = int(minute_text) if minute_text is not None else 0
+    ampm = match.group("ampm")
+    if ampm:
+        if hour < 1 or hour > 12:
+            return None
+        hour %= 12
+        if ampm.upper() == "PM":
+            hour += 12
+    elif hour > 23:
+        return None
+    if minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}"
 
 
 def _month_date_supported(raw: str, candidates: set[str]) -> bool:

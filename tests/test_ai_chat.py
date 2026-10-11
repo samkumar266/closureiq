@@ -58,6 +58,16 @@ def test_answer_validation_normalizes_aware_times_and_rounding() -> None:
     assert not validate_answer("It is 10 in at 25:30.", facts, timezone="America/Chicago")
 
 
+def test_answer_validation_supports_plain_local_times_and_rejects_invalid_times() -> None:
+    facts = [{"start": "7:30 AM", "end": "10 AM", "review": "22:15"}]
+    assert validate_answer("The start is 07:30.", facts, timezone="America/Chicago")
+    assert validate_answer("The end is 10:00 AM.", facts, timezone="America/Chicago")
+    assert validate_answer("The review is 10:15 PM.", facts, timezone="America/Chicago")
+    assert not validate_answer("The start is 7:60 AM.", facts, timezone="America/Chicago")
+    assert not validate_answer("The end is 25 AM.", facts, timezone="America/Chicago")
+    assert not validate_answer("The review is 22:60.", facts, timezone="America/Chicago")
+
+
 def test_chat_route_emits_sse_and_audits_question_tool_and_answer(tmp_path, monkeypatch) -> None:
     store = SQLiteStore(tmp_path / "closureiq.db")
     base = _seed(store)
@@ -267,6 +277,38 @@ def test_chat_registers_all_five_read_only_tools(tmp_path, monkeypatch) -> None:
         "get_thresholds",
         "run_what_if",
     ]
+
+
+def test_get_evidence_rejects_snapshot_from_another_evaluation(tmp_path, monkeypatch) -> None:
+    store = SQLiteStore(tmp_path / "closureiq.db")
+    base = _seed(store)
+    with open("mocks/delayed_arrival.json", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    other = Recommendation.model_validate(payload).model_copy(
+        update={"evaluation_id": "eval_0099", "facility_id": base.facility_id}
+    )
+    other_evidence = [InputEvidence.model_validate(item) for item in payload["inputs"]]
+    store.save_evaluation(other, other_evidence, _facility())
+    foreign_snapshot = other_evidence[0].snapshot_id
+    captured = {}
+
+    class FakeAgent:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("ai.chat.Agent", FakeAgent)
+    monkeypatch.setattr("ai.chat.get_model", lambda: "fake")
+    build_chat_agent(base, store.get_evidence(base.evaluation_id), _facility(), store)
+    get_evidence = next(
+        item for item in captured["tools"] if item.__name__ == "get_evidence"
+    )
+
+    try:
+        get_evidence(foreign_snapshot)
+    except ValueError as exc:
+        assert str(exc) == "evidence snapshot was not found"
+    else:
+        raise AssertionError("foreign evidence snapshot was accessible")
 
 
 def test_validator_contract_returns_fail_closed_result() -> None:
