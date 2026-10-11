@@ -58,5 +58,5 @@ The pitch is 3 minutes of the live app only. No slides. Judges score: usefulness
 ## Commands (confirm and update when each skeleton lands)
 
 - Frontend: `cd frontend && npm install && npm run dev`
-- Backend: `uvicorn api.app.main:app --reload`
+- Backend: `uvicorn api.main:app --reload` (api/app/main.py is the old what-if/chat-only app; do not deploy it)
 - Tests / lint: `pytest`
