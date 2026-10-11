@@ -645,6 +645,8 @@ async def agent_chat(body: ChatRequest, request: Request):
     facility = get_facility(base["facility_id"])
     audit = _AuditSink(store, body.evaluation_id)
     audit.append("agent_question", {"facility_id": body.facility_id, "message": body.message})
+    # The tools need the evaluation id as an argument, so the model must be told which one this chat is about.
+    prompt = f"Current evaluation_id: {body.evaluation_id}\nUser question: {body.message}"
     try:
         agent = build_backend_chat_agent(base["result"], _AgentBackend(store, base))
     except ValueError as exc:  # model not configured: names the missing variables, never values
@@ -652,7 +654,7 @@ async def agent_chat(body: ChatRequest, request: Request):
     except Exception:
         raise_contract_error(503, "agent_unavailable", "Agent unavailable: the model could not be created.", {})
     try:
-        events = stream_agent_events(agent, body.message)
+        events = stream_agent_events(agent, prompt)
         first_event = await events.__anext__()
     except Exception:
         raise_contract_error(503, "agent_unavailable", "Agent unavailable: the model provider did not answer.", {})
@@ -660,7 +662,7 @@ async def agent_chat(body: ChatRequest, request: Request):
         _stream_chat(first_event, events, agent=agent,
                      base=SimpleNamespace(evaluation_id=base["id"], rationale=base["result"].get("rationale", "")),
                      facility=SimpleNamespace(timezone=facility["location"]["timezone"]),
-                     store=audit, prompt=body.message),
+                     store=audit, prompt=prompt),
         media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
