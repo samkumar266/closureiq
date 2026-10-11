@@ -2,6 +2,7 @@ import { formatCountdown, formatDateTime, formatTime } from '../../format'
 import { postureTheme } from '../../theme'
 import type { Recommendation } from '../../types'
 import { PostureChip } from '../PostureChip'
+import { PostureScale } from './PostureScale'
 
 type PostureBannerProps = {
   recommendation: Recommendation
@@ -48,13 +49,15 @@ export function PostureBanner({ recommendation, timeZone, now }: PostureBannerPr
             <PostureChip posture={recommendation.posture} />
             <h2 className="text-2xl font-bold text-slate-950">{postureSummary(recommendation, timeZone)}</h2>
           </div>
-          {recommendation.held_by_hysteresis && (
-            <p className="mt-2 text-sm text-slate-700">
-              Held at this posture: the latest reading points to{' '}
-              <strong>{postureTheme[recommendation.raw_posture].label.toLowerCase()}</strong>, but a downgrade needs two
-              evaluations 15 minutes apart.
-            </p>
-          )}
+          {/* DEPRECATED(closureiq) START: hysteresis note now shown by PostureScale below. */}
+          {/* {recommendation.held_by_hysteresis && ( */}
+          {/*   <p className="mt-2 text-sm text-slate-700"> */}
+          {/*     Held at this posture: the latest reading points to{' '} */}
+          {/*     <strong>{postureTheme[recommendation.raw_posture].label.toLowerCase()}</strong>, but a downgrade needs two */}
+          {/*     evaluations 15 minutes apart. */}
+          {/*   </p> */}
+          {/* )} */}
+          {/* DEPRECATED(closureiq) END */}
         </div>
         <div className="text-right">
           <p className="text-sm font-medium text-slate-500">Decision deadline</p>
@@ -67,6 +70,10 @@ export function PostureBanner({ recommendation, timeZone, now }: PostureBannerPr
             <p className="mt-1 text-lg font-semibold text-slate-700">No decision required</p>
           )}
         </div>
+      </div>
+
+      <div className="mt-5">
+        <PostureScale posture={recommendation.posture} rawPosture={recommendation.raw_posture} />
       </div>
 
       {recommendation.safety_instruction && (

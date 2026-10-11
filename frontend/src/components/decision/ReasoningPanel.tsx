@@ -12,6 +12,12 @@ const confidenceStyles: Record<ConfidenceLevel, string> = {
   low: 'bg-red-600 text-white',
 }
 
+// "Forecast ice falls..." reads as "If forecast ice falls..."; acronyms such as NWS keep their case.
+function lowerFirstWord(text: string) {
+  const firstWord = text.split(' ')[0]
+  return firstWord.length > 1 && firstWord === firstWord.toUpperCase() ? text : text.charAt(0).toLowerCase() + text.slice(1)
+}
+
 export function ReasoningPanel({ recommendation }: ReasoningPanelProps) {
   const [copied, setCopied] = useState(false)
   const { confidence } = recommendation
@@ -52,7 +58,9 @@ export function ReasoningPanel({ recommendation }: ReasoningPanelProps) {
             {recommendation.flip_list.map((flip) => (
               <li className="text-sm text-slate-800" key={`${flip.change}-${flip.resulting_posture}`}>
                 <p>
-                  If <strong>{flip.change.charAt(0).toLowerCase() + flip.change.slice(1)}</strong>, the engine would
+                  {/* DEPRECATED(closureiq): lowercased acronyms ("NWS" became "nWS"). */}
+                  {/* If <strong>{flip.change.charAt(0).toLowerCase() + flip.change.slice(1)}</strong>, the engine would */}
+                  If <strong>{lowerFirstWord(flip.change)}</strong>, the engine would
                   recommend <PostureChip posture={flip.resulting_posture} />
                 </p>
                 {flip.note && <p className="mt-1 text-xs text-slate-500">{flip.note}</p>}

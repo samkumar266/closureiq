@@ -152,9 +152,11 @@ export async function getRoster(facilityId: string): Promise<Employee[]> {
   return employees
 }
 
-export function evaluateFacility(facilityId: string) {
-  return apiPost<Recommendation>(`/facilities/${facilityId}/evaluate`)
-}
+// DEPRECATED(closureiq) START: no screen triggers evaluation any more; the backend evaluates after every poll.
+// export function evaluateFacility(facilityId: string) {
+//   return apiPost<Recommendation>(`/facilities/${facilityId}/evaluate`)
+// }
+// DEPRECATED(closureiq) END
 
 export function getPackagePreview(evaluationId: string, posture?: Posture) {
   const query = posture ? `?posture=${posture}` : ''

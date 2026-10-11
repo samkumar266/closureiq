@@ -2,15 +2,23 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 // DEPRECATED(closureiq): facility name and timezone now come from the profile endpoint, not the facility list.
 // import { ApiError, evaluateFacility, getFacilities, getFacilityStatus, getRoster } from '../api'
-import { ApiError, evaluateFacility, getFacilityProfile, getFacilityStatus, getRoster } from '../api'
+// DEPRECATED(closureiq): ApiError and evaluateFacility were only used by the removed manual evaluate.
+// import { ApiError, evaluateFacility, getFacilityProfile, getFacilityStatus, getRoster } from '../api'
+import { getFacilityProfile, getFacilityStatus, getRoster } from '../api'
 import type { FacilityStatusResult } from '../api'
 import { ApprovalDrawer } from '../components/approval/ApprovalDrawer'
-import { AffectedEmployees } from '../components/decision/AffectedEmployees'
+// DEPRECATED(closureiq): merged into WhoGetsTold (timing, telework eligibility and each person's message).
+// import { AffectedEmployees } from '../components/decision/AffectedEmployees'
+import { WhoGetsTold } from '../components/decision/WhoGetsTold'
 import { AskPanel } from '../components/decision/AskPanel'
 import { DegradedBanner } from '../components/decision/DegradedBanner'
-import { EvidencePanel } from '../components/decision/EvidencePanel'
+// DEPRECATED(closureiq): EvidencePanel replaced by EvidenceSummary (plain-language reasons, grouped).
+// import { EvidencePanel } from '../components/decision/EvidencePanel'
+import { EvidenceSummary } from '../components/decision/EvidenceSummary'
 import { PostureBanner } from '../components/decision/PostureBanner'
 import { ReasoningPanel } from '../components/decision/ReasoningPanel'
+import { WeatherWidget } from '../components/decision/WeatherWidget'
+import { AlertList } from '../components/decision/AlertList'
 import { StatusBadges } from '../components/StatusBadges'
 import { useEventSource } from '../hooks/useEventSource'
 import { useServerClock } from '../hooks/useServerClock'
@@ -99,9 +107,12 @@ export function FacilityDecision() {
   const { id = '' } = useParams()
   const [data, setData] = useState<PageData | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [evaluating, setEvaluating] = useState(false)
-  const [evaluateError, setEvaluateError] = useState<string | null>(null)
+  // DEPRECATED(closureiq) START: state for the removed manual evaluate.
+  // const [evaluating, setEvaluating] = useState(false)
+  // const [evaluateError, setEvaluateError] = useState<string | null>(null)
+  // DEPRECATED(closureiq) END
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [showCalmDetails, setShowCalmDetails] = useState(false)
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
   const { subscribe, onReconnect } = useEventSource()
   const { now, clockMode, clockStatus, speed, dataMode: serverDataMode } = useServerClock()
@@ -140,25 +151,37 @@ export function FacilityDecision() {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe())
   }, [id, onReconnect, reload, subscribe])
 
-  const runEvaluation = async () => {
-    setEvaluating(true)
-    setEvaluateError(null)
-    try {
-      await evaluateFacility(id)
-    } catch (error) {
-      // 503 source_unavailable still records a low-confidence evaluation, so reload either way.
-      if (!(error instanceof ApiError && error.code === 'source_unavailable')) {
-        setEvaluateError(error instanceof Error ? error.message : 'Evaluation failed')
-      }
-    } finally {
-      await reload()
-      setEvaluating(false)
-    }
-  }
+  // DEPRECATED(closureiq) START: manual evaluate; the backend now evaluates after every poll.
+  // const runEvaluation = async () => {
+  //   setEvaluating(true)
+  //   setEvaluateError(null)
+  //   try {
+  //     await evaluateFacility(id)
+  //   } catch (error) {
+  //     // 503 source_unavailable still records a low-confidence evaluation, so reload either way.
+  //     if (!(error instanceof ApiError && error.code === 'source_unavailable')) {
+  //       setEvaluateError(error instanceof Error ? error.message : 'Evaluation failed')
+  //     }
+  //   } finally {
+  //     await reload()
+  //     setEvaluating(false)
+  //   }
+  // }
+  // DEPRECATED(closureiq) END
 
   const facility = data?.facility
   const recommendation = data?.status?.evaluation ?? null
   const approval = data?.status?.approval ?? null
+  // Calm: no active alert, normal posture, nothing missing, confidence not low. Details then start collapsed;
+  // anything else shows them in full. The status card and degraded banner always show (nothing defaults to normal).
+  const alertsValue = recommendation?.inputs.find((input) => input.source.toLowerCase().includes('alert'))?.value
+  const hasActiveAlert = Array.isArray(alertsValue) ? alertsValue.length > 0 : Boolean(alertsValue)
+  const calm =
+    recommendation !== null &&
+    !hasActiveAlert &&
+    recommendation.posture === 'normal_operations' &&
+    recommendation.missing_evidence.length === 0 &&
+    recommendation.confidence.level !== 'low'
   const timeZone = facility?.location.timezone ?? 'America/Chicago'
   // DEPRECATED(closureiq): list items carried data_mode; the profile does not.
   // const dataMode = serverDataMode ?? recommendation?.data_mode ?? facility?.data_mode ?? 'live'
@@ -179,17 +202,11 @@ export function FacilityDecision() {
           <div className="flex flex-wrap items-center gap-3">
             {/* DEPRECATED(closureiq): fromFixture check removed with the sample-data fallback. */}
             {/* {data !== null && !data.fromFixture && recommendation !== null && ( */}
-            {data !== null && recommendation !== null && (
-              <button
-                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-50"
-                disabled={evaluating}
-                onClick={() => void runEvaluation()}
-                title="Poll the sources and run the engine now"
-                type="button"
-              >
-                {evaluating ? 'Evaluating…' : 'Re-evaluate'}
-              </button>
-            )}
+            {/* DEPRECATED(closureiq) START: Re-evaluate button; the backend evaluates after every poll. */}
+            {/* {data !== null && recommendation !== null && ( */}
+            {/*   <button ... onClick={() => void runEvaluation()} ...>Re-evaluate</button> */}
+            {/* )} */}
+            {/* DEPRECATED(closureiq) END */}
             <StatusBadges
               clockMode={clockMode}
               clockStatus={clockStatus}
@@ -201,7 +218,8 @@ export function FacilityDecision() {
             />
           </div>
         </header>
-        {evaluateError && recommendation !== null && <p className="text-sm text-red-700">{evaluateError}</p>}
+        {/* DEPRECATED(closureiq): error line for the removed manual evaluate. */}
+        {/* {evaluateError && recommendation !== null && <p className="text-sm text-red-700">{evaluateError}</p>} */}
 
         {loadError && (
           <section className="rounded-xl border-2 border-red-600 bg-red-50 p-5 text-red-900" role="alert">
@@ -230,21 +248,27 @@ export function FacilityDecision() {
             {/*   : 'The engine has not evaluated this facility yet.'} */}
             {/* {!data.fromFixture && ( ...the Evaluate now button below... )} */}
             {/* DEPRECATED(closureiq) END */}
-            <p className="mt-1 text-slate-600">The engine has not evaluated this facility yet.</p>
-            <button
-              className="mt-4 rounded-md bg-slate-900 px-4 py-2 font-semibold text-white disabled:opacity-60"
-              disabled={evaluating}
-              onClick={() => void runEvaluation()}
-              type="button"
-            >
-              {evaluating ? 'Evaluating…' : 'Evaluate now'}
-            </button>
-            {evaluateError && <p className="mt-2 text-sm text-red-700">{evaluateError}</p>}
+            {/* DEPRECATED(closureiq) START: Evaluate now button; the backend evaluates after every poll. */}
+            {/* <p className="mt-1 text-slate-600">The engine has not evaluated this facility yet.</p> */}
+            {/* <button ... onClick={() => void runEvaluation()} ...>Evaluate now</button> */}
+            {/* {evaluateError && <p className="mt-2 text-sm text-red-700">{evaluateError}</p>} */}
+            {/* DEPRECATED(closureiq) END */}
+            <p className="mt-1 text-slate-600">
+              Waiting for the first evaluation. The engine runs after every NWS poll, about once a minute; this page
+              updates on its own.
+            </p>
           </section>
         )}
 
         {data !== null && recommendation !== null && (
           <>
+            <WeatherWidget
+              facilityName={data.facility.name}
+              now={now}
+              recommendation={recommendation}
+              timeZone={timeZone}
+            />
+            <AlertList recommendation={recommendation} timeZone={timeZone} />
             <DegradedBanner recommendation={recommendation} sources={data.status?.sources ?? []} />
             <PostureBanner now={now} recommendation={recommendation} timeZone={timeZone} />
             <DecisionBar
@@ -264,14 +288,36 @@ export function FacilityDecision() {
               recommendation={recommendation}
               timeZone={timeZone}
             />
-            <div className="grid gap-6 lg:grid-cols-2">
-              <EvidencePanel recommendation={recommendation} timeZone={timeZone} />
-              <ReasoningPanel recommendation={recommendation} />
-            </div>
-            {/* DEPRECATED(closureiq): offline prop removed with the fixture fallback. */}
-            {/* <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} offline={data.fromFixture} /> */}
-            <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} />
-            <AffectedEmployees employees={data.employees} />
+            {calm && (
+              <button
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+                onClick={() => setShowCalmDetails((current) => !current)}
+                type="button"
+              >
+                {showCalmDetails ? 'Hide details' : 'Show evidence, reasoning and employees'}
+              </button>
+            )}
+            {(!calm || showCalmDetails) && (
+              <>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  {/* DEPRECATED(closureiq): <EvidencePanel recommendation={recommendation} timeZone={timeZone} /> */}
+                  <EvidenceSummary recommendation={recommendation} timeZone={timeZone} />
+                  <ReasoningPanel recommendation={recommendation} />
+                </div>
+                {/* DEPRECATED(closureiq): offline prop removed with the fixture fallback. */}
+                {/* <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} offline={data.fromFixture} /> */}
+                <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} />
+                {/* DEPRECATED(closureiq): <AffectedEmployees employees={data.employees} /> */}
+                <WhoGetsTold
+                  commuteBufferMin={data.facility.commute_buffer_min}
+                  employees={data.employees}
+                  notificationId={data.status?.notification_id ?? null}
+                  now={now}
+                  recommendation={recommendation}
+                  timeZone={timeZone}
+                />
+              </>
+            )}
             <p className="text-sm">
               <Link className="font-medium text-blue-700 hover:underline" to={`/records/${recommendation.evaluation_id}`}>
                 View the decision record for {recommendation.evaluation_id} →

@@ -4,7 +4,9 @@ import { Link, useParams } from 'react-router-dom'
 // import { getFacilities, getRecord, getRoster, replayEvaluation } from '../api'
 import { getFacilityProfile, getRecord, getRoster, replayEvaluation } from '../api'
 import { PackageView } from '../components/approval/PackageView'
-import { EvidencePanel } from '../components/decision/EvidencePanel'
+// DEPRECATED(closureiq): EvidencePanel replaced by EvidenceSummary (plain-language reasons, grouped).
+// import { EvidencePanel } from '../components/decision/EvidencePanel'
+import { EvidenceSummary } from '../components/decision/EvidenceSummary'
 import { PostureChip } from '../components/PostureChip'
 import { StatusBadges } from '../components/StatusBadges'
 import { formatDateTime } from '../format'
@@ -228,7 +230,9 @@ export function DecisionRecord() {
               <p className="mt-3 text-sm leading-relaxed text-slate-800">{evaluation.rationale}</p>
             </Section>
 
-            <EvidencePanel recommendation={evaluation} timeZone={timeZone} />
+            {/* DEPRECATED(closureiq): <EvidencePanel recommendation={evaluation} timeZone={timeZone} /> */}
+
+            <EvidenceSummary recommendation={evaluation} timeZone={timeZone} />
 
             <Section title={`Evidence snapshots (${record.evidence.length})`}>
               <ul className="space-y-3">
