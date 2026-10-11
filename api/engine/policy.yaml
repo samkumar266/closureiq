@@ -46,10 +46,15 @@ thresholds:
     input: NWS alert tier
     cutoff: Warning
     effect: Allows delay, dismissal or closure
-    anchor: "NWS: a Warning is issued when a hazardous event is occurring or has a very high probability of occurrence."
-    anchor_url: https://weather.gov/dtx/wwa_defs
+    # DEPRECATED(closureiq) START: Detroit/Pontiac office page, cited for every facility.
+    # anchor: "NWS: a Warning is issued when a hazardous event is occurring or has a very high probability of occurrence."
+    # anchor_url: https://weather.gov/dtx/wwa_defs
+    # note: Page is from the Detroit/Pontiac office. Swap in a national NWS definitions page if one turns up.
+    # DEPRECATED(closureiq) END
+    anchor: "NWS glossary (national): a warning is issued when a hazardous weather or hydrologic event is occurring, is imminent, or has a very high probability of occurring."
+    anchor_url: https://forecast.weather.gov/glossary.php?word=warning
     status: verified
-    note: Page is from the Detroit/Pontiac office. Swap in a national NWS definitions page if one turns up.
+    note: National NWS glossary definition, read 2026-10-11. Replaces the Detroit/Pontiac office page.
 
   - id: T2
     hazard: all
@@ -77,11 +82,24 @@ thresholds:
     cutoff: 58
     unit: mph
     effect: Numeric trigger
-    anchor: "NWS Kansas City/Pleasant Hill and St. Louis: Severe Thunderstorm Warning for wind gusts of 58 mph (50 kt) or greater; High Wind Warning for gusts of 58 mph or greater."
-    anchor_url: https://www.weather.gov/eax/eaxwwacriteria
-    anchor_urls_extra: [https://www.weather.gov/lsx/criteria]
+    # DEPRECATED(closureiq) START: the Kansas City office page was cited for every facility. It now applies only
+    # to facilities in that office's area (local_anchors); other offices get the national directive below.
+    # anchor: "NWS Kansas City/Pleasant Hill and St. Louis: Severe Thunderstorm Warning for wind gusts of 58 mph (50 kt) or greater; High Wind Warning for gusts of 58 mph or greater."
+    # anchor_url: https://www.weather.gov/eax/eaxwwacriteria
+    # anchor_urls_extra: [https://www.weather.gov/lsx/criteria]
+    # DEPRECATED(closureiq) END
+    anchor: "NWS Instruction 10-515 (national): High Wind Warning when winds are forecast to meet locally defined criteria; typical values are sustained winds of 40 mph or greater for 1 hour or longer, or winds of 58 mph or greater for any duration."
+    anchor_url: https://www.weather.gov/media/directives/010_pdfs/pd01005015curr.pdf
+    # Office-specific criteria pages, keyed by the NWS office code (cwa) that /points returns for the facility.
+    local_anchors:
+      EAX:
+        anchor: "NWS Kansas City/Pleasant Hill: Severe Thunderstorm Warning for wind gusts of 58 mph (50 kt) or greater; High Wind Warning for gusts of 58 mph or greater."
+        anchor_url: https://www.weather.gov/eax/eaxwwacriteria
+      LSX:
+        anchor: "NWS St. Louis: Severe Thunderstorm Warning for wind gusts of 58 mph (50 kt) or greater; High Wind Warning for gusts of 58 mph or greater."
+        anchor_url: https://www.weather.gov/lsx/criteria
     status: verified
-    note: Verified for Kansas City and St. Louis. The Omaha criteria page could not be fetched, so confirm Omaha.
+    note: National directive read 2026-10-11 (NWSI 10-515, May 16 2025). Kansas City and St. Louis pages verified earlier. Las Vegas (VEF) and San Diego (SGX) publish no criteria page, so they use the national directive.
 
   - id: T5
     hazard: thunderstorm_wind
@@ -90,11 +108,22 @@ thresholds:
     unit: mph
     duration_min: 60
     effect: Numeric trigger
-    anchor: "NWS Kansas City/Pleasant Hill and St. Louis: High Wind Warning for sustained winds of 40 mph or greater for one hour."
-    anchor_url: https://www.weather.gov/eax/eaxwwacriteria
-    anchor_urls_extra: [https://www.weather.gov/lsx/criteria]
+    # DEPRECATED(closureiq) START: the Kansas City office page was cited for every facility (see T4).
+    # anchor: "NWS Kansas City/Pleasant Hill and St. Louis: High Wind Warning for sustained winds of 40 mph or greater for one hour."
+    # anchor_url: https://www.weather.gov/eax/eaxwwacriteria
+    # anchor_urls_extra: [https://www.weather.gov/lsx/criteria]
+    # DEPRECATED(closureiq) END
+    anchor: "NWS Instruction 10-515 (national): High Wind Warning when winds are forecast to meet locally defined criteria; typical values are sustained winds of 40 mph or greater for 1 hour or longer, or winds of 58 mph or greater for any duration."
+    anchor_url: https://www.weather.gov/media/directives/010_pdfs/pd01005015curr.pdf
+    local_anchors:
+      EAX:
+        anchor: "NWS Kansas City/Pleasant Hill: High Wind Warning for sustained winds of 40 mph or greater for one hour."
+        anchor_url: https://www.weather.gov/eax/eaxwwacriteria
+      LSX:
+        anchor: "NWS St. Louis: High Wind Warning for sustained winds of 40 mph or greater for one hour."
+        anchor_url: https://www.weather.gov/lsx/criteria
     status: verified
-    note: Offices vary. Confirm Omaha. Kansas City says the wind is not directly associated with convection.
+    note: Offices vary; the national directive gives the typical values. Kansas City says the wind is not directly associated with convection.
 
   - id: T6
     hazard: winter_storm

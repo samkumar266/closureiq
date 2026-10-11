@@ -47,6 +47,31 @@ def test_measured_gust_over_58_mph_crosses_t4_and_drives_closure():
     t4 = [t for t in result["thresholds_crossed"] if t["id"] == "T4"]
     assert t4 and t4[0]["actual"] == 62.1  # 100 km/h
     assert result["posture"] == "closure"
+    # Threshold defensibility: the crossing carries the sourced anchor from policy.yaml, not a placeholder.
+    assert "58 mph" in t4[0]["anchor"] and t4[0]["anchor_url"].startswith("https://")
+
+
+def _points(cwa: str) -> dict:
+    return {"id": "snap_points", "facility_id": "kingman-az-service-center", "source": "NWS point metadata", "ok": True,
+            "fetched_at_wall": NOW.isoformat(), "raw_payload_json": {"properties": {"cwa": cwa}}, "http_status": 200}
+
+
+def test_cutoff_source_follows_the_facilitys_own_nws_office():
+    facility = get_facility("kingman-az-service-center")
+    for cwa, expected_url in (("VEF", "pd01005015curr.pdf"), ("EAX", "eax/eaxwwacriteria")):
+        result = fallback_evaluate(None, facility, _evidence(_observations(100.0)) + [_points(cwa)], evaluated_at=NOW)
+        t4 = next(t for t in result["thresholds_crossed"] if t["id"] == "T4")
+        assert expected_url in t4["anchor_url"], cwa
+        assert result["nws_office"] == cwa
+
+
+def test_thresholds_catalogue_matches_policy_yaml():
+    from api.app.thresholds import thresholds_response
+    catalogue = {t["id"]: t for t in thresholds_response()["thresholds"]}
+    assert set(catalogue) == {f"T{n}" for n in range(1, 12)}
+    assert catalogue["T4"]["status"] == "verified" and catalogue["T4"]["anchor_url"].startswith("https://")
+    assert catalogue["T2"]["cutoff"] == "Severe or Extreme"
+    assert catalogue["T10"]["anchor_url"] is None  # team choice, no external source
 
 
 def test_missing_observation_is_reported_but_does_not_force_the_posture():
@@ -55,3 +80,14 @@ def test_missing_observation_is_reported_but_does_not_force_the_posture():
     result = fallback_evaluate(None, get_facility("kingman-az-service-center"), _evidence(stale), evaluated_at=NOW)
     assert any(m["source"] == "NWS station observations" for m in result["missing_evidence"])
     assert "T4" not in {t["id"] for t in result["thresholds_crossed"]}
+
+
+def test_rationale_is_paste_ready_and_uses_engine_values():
+    result = fallback_evaluate(None, get_facility("kingman-az-service-center"),
+                               _evidence(_observations(100.0)) + [_points("VEF")], evaluated_at=NOW)
+    text = result["rationale"]
+    assert text.startswith("Recommend closing Kingman Service Center")
+    assert "7:30 AM to 4:00 PM" in text                      # closed_from / closed_until
+    assert "62.1 mph, 4.1 mph over the 58 mph cutoff" in text  # actual, margin and cutoff
+    assert "A decision is needed by" in text
+    assert "MVP fallback" not in text and "nWS" not in text

@@ -14,6 +14,7 @@ import json
 from api.ingest.normalizers import normalize_alerts, parse_datetime, extract_usgs_latest
 from api.ingest.units import target_unit_for_field, convert_value
 from api.ingest.poller import SOURCE_MAX_AGE_SECONDS
+from api.app.thresholds import anchor_for
 
 POSTURES = ["normal_operations", "delayed_arrival", "early_dismissal", "unscheduled_leave_or_telework", "closure"]
 POSTURE_RANK = {p: i for i, p in enumerate(POSTURES)}
@@ -162,6 +163,143 @@ def _observed_wind(payload: dict, station: str, now: datetime) -> dict | None:
     }
 
 
+POSTURE_TEXT = {
+    "normal_operations": "normal operations",
+    "delayed_arrival": "a delayed arrival",
+    "early_dismissal": "an early dismissal",
+    "unscheduled_leave_or_telework": "unscheduled leave or telework",
+    "closure": "closure",
+}
+NUMERIC_TEXT = {"T4": "wind gusts", "T5": "sustained wind", "T6": "ice accumulation",
+                "T7": "the river level", "T8": "the river level", "T9": "the river level"}
+
+
+def _clock(value: str | None, tzname: str) -> str:
+    parsed = parse_datetime(value)
+    if parsed is None:
+        return "an unknown time"
+    local = parsed.astimezone(ZoneInfo(tzname))
+    return f"{local.hour % 12 or 12}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
+
+
+def _day(value: str | None, tzname: str) -> str:
+    parsed = parse_datetime(value)
+    if parsed is None:
+        return "an unknown day"
+    local = parsed.astimezone(ZoneInfo(tzname))
+    return f"{local.strftime('%A, %B')} {local.day}"
+
+
+def _hhmm(text: str) -> str:
+    hours, minutes = (int(part) for part in text.split(":"))
+    return f"{hours % 12 or 12}:{minutes:02d} {'AM' if hours < 12 else 'PM'}"
+
+
+def _amount(value: Any, unit: str | None) -> str:
+    number = f"{float(value):.1f}".rstrip("0").rstrip(".") if isinstance(value, (int, float)) else str(value)
+    return f"{number} {unit}" if unit else number
+
+
+def _lower_first(text: str) -> str:
+    """Lowercase the first letter for use mid-sentence, but keep acronyms such as NWS or KIGM intact."""
+    first = text.split(" ")[0]
+    return text if len(first) > 1 and first.isupper() else text[:1].lower() + text[1:]
+
+
+def _build_rationale(*, facility: dict, tzname: str, posture: str, params: dict, now: datetime,
+                     strongest: dict | None, active_alerts: list[dict], inputs: list[dict],
+                     crossed: list[dict], not_crossed: list[dict], missing: list[dict],
+                     confidence_level: str, confidence_reasons: list[str], flips: list[dict],
+                     decision_deadline: str | None, safety_instruction: str | None,
+                     arrival_overlap: bool, departure_overlap: bool) -> str:
+    """Paste-ready paragraph built only from values this evaluation already holds (architecture:
+    "a template filled from engine values, so it cannot contain a number the engine did not produce")."""
+    name = facility["name"]
+    today = _day(now.isoformat(), tzname)
+
+    def _when(value: str | None) -> str:
+        # "5:00 AM" when it is today; "9:43 PM on Saturday, October 10" otherwise, so ranges never read backwards.
+        return _clock(value, tzname) if _day(value, tzname) == today else f"{_clock(value, tzname)} on {_day(value, tzname)}"
+    sentences: list[str] = []
+
+    if posture == "closure":
+        sentences.append(f"Recommend closing {name} on {_day(params.get('closed_from'), tzname)}, from "
+                         f"{_clock(params.get('closed_from'), tzname)} to {_clock(params.get('closed_until'), tzname)}.")
+    elif posture == "delayed_arrival":
+        sentences.append(f"Recommend a delayed arrival at {name} until {_clock(params.get('delay_until'), tzname)} "
+                         f"on {_day(params.get('delay_until'), tzname)}.")
+    elif posture == "early_dismissal":
+        sentences.append(f"Recommend an early dismissal at {name} at {_clock(params.get('dismiss_at'), tzname)} "
+                         f"on {_day(params.get('dismiss_at'), tzname)}.")
+    elif posture == "unscheduled_leave_or_telework":
+        sentences.append(f"Recommend unscheduled leave or telework at {name} on {today}: the facility stays open, "
+                         "with telework or leave per policy for staff who can.")
+    else:
+        sentences.append(f"Recommend normal operations at {name} on {today}"
+                         + (", with elevated monitoring." if params.get("monitoring") == "elevated" else "."))
+
+    if safety_instruction:
+        sentences.append(f"Safety instruction: {safety_instruction}")
+
+    if strongest:
+        issuer = f" from {strongest['sender_name']}" if strongest.get("sender_name") else ""
+        timing = ""
+        if strongest.get("onset") and strongest.get("ends"):
+            timing = f" is in effect from {_when(strongest['onset'])} to {_when(strongest['ends'])}"
+        else:
+            timing = " is in effect"
+        windows = [label for covered, label in (
+            (arrival_overlap, f"the {_hhmm(facility['arrival_window']['start'])}-{_hhmm(facility['arrival_window']['end'])} arrival window"),
+            (departure_overlap, f"the {_hhmm(facility['departure_window']['start'])}-{_hhmm(facility['departure_window']['end'])} departure window"),
+        ) if covered]
+        sentences.append(f"A {strongest.get('event')}{issuer} (severity {strongest.get('severity')}, certainty "
+                         f"{strongest.get('certainty')}){timing}" + (f", covering {' and '.join(windows)}." if windows else "."))
+    else:
+        sentences.append("No NWS alert is active at the facility.")
+
+    def how(threshold: dict) -> str:
+        source = next((i for i in inputs if i["id"] == threshold.get("input_id")), {})
+        if "observations" in str(source.get("source", "")).lower():
+            station = (source.get("value") or {}).get("station")
+            return f"measured at the {station} station" if station else "measured"
+        return "forecast"
+
+    numeric_crossed = [t for t in crossed if t["id"] in NUMERIC_TEXT]
+    for threshold in numeric_crossed:
+        subject = NUMERIC_TEXT[threshold["id"]]
+        verb = "are forecast to reach" if how(threshold) == "forecast" else f"{how(threshold)} reached"
+        sentences.append(f"{subject[:1].upper() + subject[1:]} {verb} {_amount(threshold['actual'], threshold.get('unit'))}, "
+                         f"{_amount(threshold.get('margin'), threshold.get('unit'))} over the "
+                         f"{_amount(threshold['cutoff'], threshold.get('unit'))} cutoff.")
+    if not numeric_crossed:
+        gusts = [t for t in not_crossed if t["id"] == "T4"]
+        if gusts:
+            readings = "; ".join(f"{how(t)} {_amount(t['actual'], t.get('unit'))}" for t in gusts)
+            sentences.append(f"No wind, ice or river value has crossed its threshold (peak gusts: {readings}, "
+                             f"against a {_amount(gusts[0]['cutoff'], gusts[0].get('unit'))} cutoff).")
+        else:
+            sentences.append("No wind, ice or river value has crossed its threshold.")
+
+    others = [a for a in active_alerts if a is not strongest]
+    if others:
+        listed = ", ".join(f"a {a.get('event')} (certainty {a.get('certainty')})" for a in others[:2])
+        sentences.append(f"Also checked and not driving the recommendation: {listed}.")
+    if missing:
+        sentences.append("This is not an all-clear: " + "; ".join(m["reason"] for m in missing) + ".")
+
+    reasons = "; ".join(_lower_first(r) for r in confidence_reasons[:2])
+    sentences.append(f"Confidence is {confidence_level}" + (f": {reasons}." if reasons else "."))
+    if flips:
+        change = flips[0]["change"]
+        sentences.append(f"If {_lower_first(change)}, "
+                         f"the recommendation becomes {POSTURE_TEXT.get(flips[0]['resulting_posture'], flips[0]['resulting_posture'])}.")
+    if decision_deadline:
+        sentences.append(f"A decision is needed by {_clock(decision_deadline, tzname)} on {_day(decision_deadline, tzname)}.")
+    elif params.get("next_update"):
+        sentences.append(f"No decision is needed now; the next evaluation runs at {_clock(params['next_update'], tzname)}.")
+    return " ".join(sentences)
+
+
 def _next_work_deadline(facility: dict, now_local: datetime) -> str:
     hh, mm = [int(x) for x in facility.get("earliest_departure", "06:15").split(":")]
     deadline = datetime.combine(now_local.date(), time(hh, mm), tzinfo=now_local.tzinfo) - timedelta(minutes=int(facility.get("notification_lead_min", 90)))
@@ -199,6 +337,10 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
     usable: dict[str, dict | None] = {}
     for source in SOURCE_MAX_AGE_SECONDS:
         usable[source] = good_map.get(source) or snap_map.get(source)
+    # The facility's NWS forecast office (cwa) from the stored /points response. It picks the office's own
+    # criteria page when policy.yaml has one, and is recorded so the record shows whose criteria applied.
+    points_payload = (usable.get("NWS point metadata") or {}).get("raw_payload_json") or {}
+    nws_office = (points_payload.get("properties") or {}).get("cwa")
 
     inputs: list[dict] = []
     missing: list[dict] = []
@@ -318,9 +460,13 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
             if max_item["value"] >= cutoff:
                 numeric_trigger = True
                 matching_input = next((i for i in inputs if i["source"] == "NWS forecast grid"), None)
+                # DEPRECATED(closureiq): placeholder anchor; the sourced anchor now comes from policy.yaml.
+                # threshold_crossed.append({"id": threshold_id, "input_id": matching_input["id"] if matching_input else "in_1",
+                #     "cutoff": cutoff, "actual": max_item["value"], "unit": unit,
+                #     "margin": round(max_item["value"] - cutoff, 3), "anchor": "MVP threshold; confirm local NWS criteria", "anchor_url": None})
                 threshold_crossed.append({"id": threshold_id, "input_id": matching_input["id"] if matching_input else "in_1",
                     "cutoff": cutoff, "actual": max_item["value"], "unit": unit,
-                    "margin": round(max_item["value"] - cutoff, 3), "anchor": "MVP threshold; confirm local NWS criteria", "anchor_url": None})
+                    "margin": round(max_item["value"] - cutoff, 3), **anchor_for(threshold_id, nws_office)})
 
     # Measured wind counts as a numeric trigger too: the T4/T5 anchors describe gusts and winds that occur.
     observed_not_crossed: list[dict] = []
@@ -332,8 +478,7 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
                 numeric_trigger = True
                 obs_input["role"] = "drove"
                 threshold_crossed.append({"id": threshold_id, "input_id": obs_input["id"], "cutoff": cutoff, "actual": actual,
-                    "unit": "mph", "margin": round(actual - cutoff, 3),
-                    "anchor": "MVP threshold; confirm local NWS criteria", "anchor_url": None})
+                    "unit": "mph", "margin": round(actual - cutoff, 3), **anchor_for(threshold_id, nws_office)})
             else:
                 observed_not_crossed.append({"id": threshold_id, "input_id": obs_input["id"], "cutoff": cutoff,
                     "actual": actual, "unit": "mph", "distance": round(cutoff - actual, 3)})
@@ -350,6 +495,7 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
     high_confidence_alert = False
     strong_warning = False
     window_posture = None
+    arrival_overlap = departure_overlap = False
     if strongest:
         headline = str(strongest.get("headline") or strongest.get("event") or "Active NWS alert")
         tier = strongest.get("tier", "advisory")
@@ -366,7 +512,8 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
             ("T2", "Severe or Extreme", str(strongest.get("severity") or "Unknown"), severity in {"severe", "extreme"}),
             ("T3", "Likely or Observed", str(strongest.get("certainty") or "Unknown"), certainty in {"likely", "observed"}),
         ):
-            item = {"id": threshold_id, "input_id": alert_input["id"] if alert_input else "in_1", "cutoff": cutoff, "actual": actual}
+            item = {"id": threshold_id, "input_id": alert_input["id"] if alert_input else "in_1", "cutoff": cutoff, "actual": actual,
+                    **anchor_for(threshold_id, nws_office)}
             (threshold_crossed if passed else observed_not_crossed).append(item)
         threshold_crossed.sort(key=lambda t: int(str(t["id"]).lstrip("T") or 0))
         # Which commute windows the hazard covers decides delay, dismissal or closure (posture table timing).
@@ -508,12 +655,25 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
     not_crossed.extend(observed_not_crossed)
 
     flips = []
-    if strong_warning and not numeric_trigger and window_posture:
-        flips.append({"change": "Measured or forecast wind gusts reach 58 mph, or sustained winds reach 40 mph",
-                      "resulting_posture": window_posture,
+    # DEPRECATED(closureiq) START: always named wind, even for a flood or winter warning.
+    # if strong_warning and not numeric_trigger and window_posture:
+    #     flips.append({"change": "Measured or forecast wind gusts reach 58 mph, or sustained winds reach 40 mph",
+    #                   "resulting_posture": window_posture,
+    #                   "note": "The warning already covers the commute windows; only a crossed numeric threshold is missing."})
+    # DEPRECATED(closureiq) END
+    # Name the numeric trigger that fits the driving alert's hazard; say nothing if none can apply here.
+    hazard_trigger = {
+        "thunderstorm and wind": "Measured or forecast wind gusts reach 58 mph, or sustained winds reach 40 mph",
+        "winter storm": "Forecast ice accumulation reaches 0.25 in",
+        "flood": "The river gauge reaches minor flood stage" if facility.get("gauge") else None,
+    }.get(str((strongest or {}).get("hazard")))
+    if strong_warning and not numeric_trigger and window_posture and hazard_trigger:
+        flips.append({"change": hazard_trigger, "resulting_posture": window_posture,
                       "note": "The warning already covers the commute windows; only a crossed numeric threshold is missing."})
     if strongest and strongest.get("tier") == "warning":
-        flips.append({"change": "NWS warning is downgraded to a Watch", "resulting_posture": "normal_operations", "note": "Fallback policy; confirm with the shared engine."})
+        # DEPRECATED(closureiq): the note exposed internals to facility managers.
+        # flips.append({"change": "NWS warning is downgraded to a Watch", "resulting_posture": "normal_operations", "note": "Fallback policy; confirm with the shared engine."})
+        flips.append({"change": "NWS downgrades the warning to a Watch", "resulting_posture": "normal_operations", "note": None})
     if not alert_source_ok:
         flips.append({"change": "NWS alert source returns a fresh successful response", "resulting_posture": "normal_operations", "note": "Re-evaluate with current evidence before deciding."})
     if numeric_trigger:
@@ -523,13 +683,22 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
     if not flips:
         flips.append({"change": "A warning or numeric threshold appears in fresh evidence", "resulting_posture": "unscheduled_leave_or_telework", "note": "Re-evaluate when evidence changes."})
 
-    alerts_for_text = ", ".join(f"{a.get('event')} ({a.get('severity')}, certainty {a.get('certainty')})" for a in active_alerts[:3]) or "no active alerts"
-    rationale = (
-        f"MVP fallback recommends {posture.replace('_', ' ')} for {facility['name']}. "
-        f"NWS point alerts: {alerts_for_text}. Confidence is {confidence_level}. "
-        + (f"Missing or stale evidence: {', '.join(m['source'] for m in missing)}. " if missing else "All applicable sources are fresh. ")
-        + ("A human must review the recommendation before any action is taken." if decision_needed else "No automatic operational action is taken.")
-    )
+    # DEPRECATED(closureiq) START: one-line rationale ("MVP fallback recommends ...") without times, thresholds,
+    # margins or the deadline. Replaced by the paste-ready template in _build_rationale.
+    # alerts_for_text = ", ".join(f"{a.get('event')} ({a.get('severity')}, certainty {a.get('certainty')})" for a in active_alerts[:3]) or "no active alerts"
+    # rationale = (
+    #     f"MVP fallback recommends {posture.replace('_', ' ')} for {facility['name']}. "
+    #     f"NWS point alerts: {alerts_for_text}. Confidence is {confidence_level}. "
+    #     + (f"Missing or stale evidence: {', '.join(m['source'] for m in missing)}. " if missing else "All applicable sources are fresh. ")
+    #     + ("A human must review the recommendation before any action is taken." if decision_needed else "No automatic operational action is taken.")
+    # )
+    # DEPRECATED(closureiq) END
+    rationale = _build_rationale(
+        facility=facility, tzname=tzname, posture=posture, params=params, now=now, strongest=strongest,
+        active_alerts=active_alerts, inputs=inputs, crossed=threshold_crossed, not_crossed=not_crossed,
+        missing=missing, confidence_level=confidence_level, confidence_reasons=confidence_reasons, flips=flips,
+        decision_deadline=decision_deadline, safety_instruction=safety_instruction,
+        arrival_overlap=arrival_overlap, departure_overlap=departure_overlap)
     result = {
         "hypothetical": bool(hypothetical), "evaluation_id": None, "supersedes": None,
         "facility_id": facility["facility_id"], "evaluated_at": local_now.isoformat(),
@@ -542,6 +711,7 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
         "thresholds_not_crossed": not_crossed, "missing_evidence": missing,
         "flip_list": flips, "rationale": rationale,
         "engine_version": "badri-fallback-0.1",
+        "nws_office": nws_office,
         "headline": headline,
     }
     if overrides:
