@@ -6,11 +6,18 @@ storage can be exercised end-to-end. It is not a validated operational closure p
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone, timedelta, time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 from typing import Any
 import json
+import yaml
 
+from api.engine import Employee, Facility, InputEvidence, Policy, Recommendation, SourceHealth
+from api.engine import evaluate as shared_evaluate
+from api.engine.policy_validation import validate_policy
+from api.app.roster import get_roster
 from api.ingest.normalizers import normalize_alerts, parse_datetime, extract_usgs_latest
 from api.ingest.units import target_unit_for_field, convert_value
 from api.ingest.poller import SOURCE_MAX_AGE_SECONDS
@@ -432,23 +439,225 @@ def fallback_evaluate(store, facility: dict, snapshots: list[dict], *, evaluated
 def evaluate_recommendation(store, facility: dict, snapshots: list[dict], *, evaluated_at: datetime | None = None,
                             previous_result: dict | None = None, overrides: dict | None = None,
                             hypothetical: bool = False, data_mode: str | None = None) -> dict:
-    """Single seam to integrate Samanth's engine; fallback remains runnable standalone."""
-    # Expected integration contract after Samanth's engine is merged:
-    # api.engine.evaluate(evidence=..., facility=..., policy_version=..., now=...)
-    # Keep the API from importing the agent/model directly.
-    try:
-        from api.engine import evaluate as shared_evaluate  # type: ignore[attr-defined]
-    except (ImportError, AttributeError):
-        shared_evaluate = None
-    if shared_evaluate:
-        try:
-            return shared_evaluate(evidence=snapshots, facility=facility,
-                                  policy_version=facility.get("policy_version"), now=evaluated_at,
-                                  previous=previous_result, overrides=overrides,
-                                  hypothetical=hypothetical, data_mode=data_mode)
-        except TypeError:
-            # Clear interface mismatch is documented in docs/ENGINE_INTEGRATION.md; fallback keeps MVP bootable.
-            pass
-    return fallback_evaluate(store, facility, snapshots, evaluated_at=evaluated_at,
-                             previous_result=previous_result, overrides=overrides,
-                             hypothetical=hypothetical, data_mode=data_mode)
+    """Evaluate the supplied snapshot set with the shared deterministic engine."""
+    del store
+    now = evaluated_at or datetime.now(timezone.utc)
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("evaluated_at must include a timezone offset")
+    canonical_facility = Facility.model_validate(facility)
+    policy_path = Path(__file__).parents[1] / "engine" / "policy.yaml"
+    policy_values = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    if not isinstance(policy_values, dict):
+        raise ValueError("policy.yaml must contain a mapping")
+    if policy_values.get("policy_version") != canonical_facility.policy_version:
+        raise ValueError("facility and policy versions must match")
+    validate_policy(policy_values)
+    policy = Policy(
+        policy_version=canonical_facility.policy_version,
+        values=policy_values,
+    )
+    evidence, source_health = _typed_inputs(
+        canonical_facility, snapshots, now
+    )
+    if overrides:
+        evidence = _apply_typed_overrides(evidence, overrides)
+    roster = [Employee.model_validate(item) for item in get_roster()]
+    previous = _typed_previous(previous_result)
+    result = shared_evaluate(
+        evidence,
+        source_health,
+        canonical_facility,
+        roster,
+        policy,
+        now,
+        evaluation_id=(
+            previous.evaluation_id if hypothetical and previous else "eval_0000"
+        ),
+        data_mode=data_mode or "live",
+        previous=previous,
+    )
+    if hypothetical:
+        result = result.model_copy(update={"hypothetical": True})
+    serialized = result.model_dump(mode="json")
+    serialized["engine_version"] = "shared-policy-engine-1.0"
+    serialized["headline"] = result.rationale
+    return serialized
+
+
+def _typed_previous(previous_result: dict | None) -> Recommendation | None:
+    """Convert a saved result only when it is canonical engine output.
+
+    Fallback-era evaluations are historical records, not canonical
+    recommendations. They cannot safely provide hysteresis state because their
+    input values use a different schema, so the next evaluation starts without
+    a previous recommendation.
+    """
+    if previous_result is None:
+        return None
+    if previous_result.get("engine_version") == "badri-fallback-0.1":
+        return None
+    fields = Recommendation.model_fields
+    return Recommendation.model_validate(
+        {key: previous_result[key] for key in fields if key in previous_result}
+    )
+
+
+def _typed_inputs(
+    facility: Facility, snapshots: list[dict], now: datetime
+) -> tuple[list[InputEvidence], list[SourceHealth]]:
+    required = ["NWS alerts", "NWS forecast grid", "NWS hourly forecast"]
+    if facility.gauge:
+        required.extend(["USGS gauge", "NWS flood categories"])
+    evidence: list[InputEvidence] = []
+    health: list[SourceHealth] = []
+    for source in required:
+        matching = [item for item in snapshots if item.get("source") == source]
+        latest = matching[-1] if matching else None
+        successful = [item for item in matching if item.get("ok")]
+        last_good = successful[-1] if successful else None
+        max_age = SOURCE_MAX_AGE_SECONDS[source]
+        fetched = parse_datetime(latest.get("fetched_at_wall")) if latest else None
+        age = _age_seconds(latest, now) if latest else None
+        fresh = bool(latest and latest.get("ok") and age is not None and age <= max_age)
+        health.append(SourceHealth(
+            source=source,
+            status="fresh" if fresh else ("stale" if last_good else "missing"),
+            fetched_at=fetched,
+            last_good_snapshot_id=last_good.get("id") if last_good else None,
+            last_good_age_minutes=(
+                round(_age_seconds(last_good, now) / 60, 1)
+                if last_good and _age_seconds(last_good, now) is not None
+                else None
+            ),
+            max_age_minutes=max_age // 60,
+            reason=None if fresh else (
+                latest.get("error_text") if latest and latest.get("error_text")
+                else f"{source} is missing or stale"
+            ),
+        ))
+        if latest is None:
+            continue
+        payload = latest.get("raw_payload_json") or {}
+        evidence.extend(_snapshot_evidence(source, latest, payload, fresh))
+    evidence = [
+        item.model_copy(update={"id": f"in_{index:04d}"})
+        for index, item in enumerate(evidence, start=1)
+    ]
+    return evidence, health
+
+
+def _snapshot_evidence(
+    source: str, snapshot: dict, payload: dict, fresh: bool
+) -> list[InputEvidence]:
+    fetched = parse_datetime(snapshot.get("fetched_at_wall"))
+    if fetched is None:
+        raise ValueError(f"{source} snapshot has no timezone-aware fetched_at_wall")
+    snapshot_id = snapshot.get("id")
+    if not isinstance(snapshot_id, str):
+        raise ValueError(f"{source} snapshot has no id")
+    stale = not fresh
+    if source == "NWS alerts":
+        alerts = normalize_alerts(payload) if snapshot.get("ok") else []
+        strongest = max(
+            alerts,
+            key=lambda item: {"none": 0, "advisory": 1, "watch": 2, "warning": 3}.get(
+                item.get("tier"), 0
+            ),
+            default={},
+        )
+        onset = parse_datetime(min(
+            (item["onset"] for item in alerts if item.get("onset")),
+            default=None,
+        ))
+        ends = parse_datetime(max(
+            (item["ends"] for item in alerts if item.get("ends")),
+            default=None,
+        ))
+        value = {
+            "highest_tier": strongest.get("tier", "none"),
+            "severity": strongest.get("severity") or "",
+            "certainty": strongest.get("certainty") or "",
+            "alerts": alerts,
+        }
+        return [InputEvidence(
+            id=f"in_{snapshot_id}_alerts",
+            role="drove" if alerts else "context",
+            source=source,
+            label="Active NWS alerts at facility point",
+            value=value,
+            onset=onset,
+            ends=ends,
+            fetched_at=fetched,
+            snapshot_id=snapshot_id,
+            source_updated_at=parse_datetime(snapshot.get("source_updated_at")),
+            stale=stale,
+            ok=bool(snapshot.get("ok")),
+        )]
+    if source == "NWS forecast grid":
+        result = []
+        for field_name, label, unit, hazard in (
+            ("windGust", "Forecast wind gust", "mph", "thunderstorm_wind"),
+            ("windSpeed", "Sustained wind", "mph", "thunderstorm_wind"),
+            ("iceAccumulation", "Ice accumulation", "in", "winter_storm"),
+        ):
+            periods = _field_periods(payload, field_name)
+            if not periods:
+                continue
+            latest = periods[-1]
+            result.append(InputEvidence(
+                id=f"in_{snapshot_id}_{field_name}",
+                role="context",
+                source=source,
+                label=label,
+                value=latest["value"],
+                unit=unit,
+                hazard=hazard,
+                fetched_at=fetched,
+                snapshot_id=snapshot_id,
+                stale=stale,
+                ok=bool(snapshot.get("ok")),
+            ))
+        return result
+    if source == "USGS gauge":
+        latest = extract_usgs_latest(payload)
+        stage = latest.get("stage") if latest else None
+        if isinstance(stage, dict) and isinstance(stage.get("value"), (int, float)):
+            return [InputEvidence(
+                id=f"in_{snapshot_id}_stage",
+                role="context",
+                source=source,
+                label="Gauge stage",
+                value=stage["value"],
+                unit="ft",
+                hazard="flood",
+                fetched_at=fetched,
+                snapshot_id=snapshot_id,
+                stale=stale,
+                ok=bool(snapshot.get("ok")),
+            )]
+    return []
+
+
+def _apply_typed_overrides(
+    evidence: list[InputEvidence], overrides: dict
+) -> list[InputEvidence]:
+    updated = deepcopy(evidence)
+    for input_id, value in overrides.items():
+        matches = [index for index, item in enumerate(updated) if item.id == input_id]
+        if len(matches) != 1:
+            raise ValueError(f"unknown what-if input id: {input_id}")
+        index = matches[0]
+        item = updated[index]
+        if value is None:
+            updated.pop(index)
+        elif isinstance(item.value, dict):
+            if not isinstance(value, dict):
+                raise ValueError(f"{input_id} requires a dictionary override")
+            merged = dict(item.value)
+            merged.update(deepcopy(value))
+            updated[index] = item.model_copy(update={"value": merged, "stale": False})
+        elif isinstance(value, dict) or not isinstance(value, (str, int, float, bool)):
+            raise ValueError(f"{input_id} has an invalid override value")
+        else:
+            updated[index] = item.model_copy(update={"value": value, "stale": False})
+    return updated
