@@ -140,6 +140,46 @@ def build_chat_agent(
     )
 
 
+BACKEND_PROMPT = SYSTEM_PROMPT + (
+    " Answer in plain sentences, at most 150 words. Quote every number exactly as a tool "
+    "returned it, with its unit. Write times as local clock times such as 11:24 PM and never "
+    "copy raw ISO timestamps. Name a threshold id (T1, T4, ...) only if it appears in the "
+    "evaluation's thresholds_crossed or thresholds_not_crossed. For a what-if question, call run_what_if: overrides map an "
+    "input id to a new value; for the forecast grid input pass a dict of field to number, "
+    "for example {\"in_2\": {\"windGust\": 65}} (mph), then say the result is hypothetical."
+)
+MAX_LIST_ITEMS = 12
+MAX_STRING_CHARS = 600
+MAX_RESULT_CHARS = 12000
+
+
+def compact_for_model(value: Any) -> Any:
+    """Shrink a tool result so the model's context cannot overflow: lists keep their
+    first 12 items plus a count of the rest, long strings are cut. The validator checks
+    the answer against exactly this compacted result, so nothing unseen is trusted."""
+    if isinstance(value, dict):
+        return {key: compact_for_model(child) for key, child in value.items()}
+    if isinstance(value, list):
+        kept = [compact_for_model(child) for child in value[:MAX_LIST_ITEMS]]
+        if len(value) > MAX_LIST_ITEMS:
+            kept.append({"omitted_items": len(value) - MAX_LIST_ITEMS})
+        return kept
+    if isinstance(value, str) and len(value) > MAX_STRING_CHARS:
+        return value[:MAX_STRING_CHARS] + " [truncated]"
+    return value
+
+
+def _bounded(value: Any) -> Any:
+    """compact_for_model, then refuse anything still too large for the endpoint."""
+    import json as _json
+
+    small = compact_for_model(value)
+    if len(_json.dumps(small, default=str)) > MAX_RESULT_CHARS:
+        return {"note": "result too large to show the model; summary only",
+                "keys": sorted(small) if isinstance(small, dict) else None}
+    return small
+
+
 def build_backend_chat_agent(evaluation: dict[str, Any], backend: Any) -> Agent:
     """Same guarded agent for the main app (api/main.py), whose evaluations are dicts.
 
@@ -157,12 +197,12 @@ def build_backend_chat_agent(evaluation: dict[str, Any], backend: Any) -> Agent:
     def get_evaluation(evaluation_id: str) -> dict[str, Any]:
         """Read the stored evaluation when its ID matches the current chat."""
         _same(evaluation_id)
-        return _alert_safe(deepcopy(evaluation))
+        return _alert_safe(_bounded(deepcopy(evaluation)))
 
     @tool
     def get_evidence(snapshot_id: str) -> dict[str, Any]:
         """Read one stored evidence snapshot used by the current evaluation."""
-        return _alert_safe(backend.get_evidence(snapshot_id))
+        return _alert_safe(_bounded(backend.get_evidence(snapshot_id)))
 
     @tool
     def list_affected_employees(
@@ -170,7 +210,7 @@ def build_backend_chat_agent(evaluation: dict[str, Any], backend: Any) -> Agent:
     ) -> list[dict[str, Any]]:
         """Read roster rows (group, telework eligibility) for the evaluation's facility."""
         _same(evaluation_id)
-        return backend.list_affected_employees(filter)
+        return _bounded(backend.list_affected_employees(filter))
 
     @tool
     def get_thresholds() -> list[dict[str, Any]]:
@@ -181,12 +221,12 @@ def build_backend_chat_agent(evaluation: dict[str, Any], backend: Any) -> Agent:
     def run_what_if(evaluation_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
         """Run a hypothetical evaluation without changing stored records."""
         _same(evaluation_id)
-        return _alert_safe(backend.run_what_if(deepcopy(overrides)))
+        return _alert_safe(_bounded(backend.run_what_if(deepcopy(overrides))))
 
     return Agent(
         model=get_model(),
         tools=[get_evaluation, get_evidence, list_affected_employees, get_thresholds, run_what_if],
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=BACKEND_PROMPT,
     )
 
 

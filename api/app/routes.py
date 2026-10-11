@@ -601,9 +601,15 @@ class _AgentBackend:
         if snapshot_id not in self.base["evidence_ids"]:
             raise ValueError("evidence snapshot is not part of this evaluation")
         snap = self.store.get_snapshot(snapshot_id)
-        return {"snapshot_id": snap["id"], "source": snap["source"], "url": snap.get("url"),
-                "fetched_at_wall": snap.get("fetched_at_wall"), "ok": snap.get("ok"),
-                "raw_payload": snap.get("raw_payload_json")}
+        out = {"snapshot_id": snap["id"], "source": snap["source"], "url": snap.get("url"),
+               "fetched_at_wall": snap.get("fetched_at_wall"), "ok": snap.get("ok")}
+        if snap["source"] == "NWS forecast grid":
+            # The raw grid has ~60 fields; give the model the five the policy uses, same as the engine.
+            from api.app.engine_adapter import _grid_summary
+            out["grid_fields"] = _grid_summary(snap.get("raw_payload_json") or {})
+        else:
+            out["raw_payload"] = snap.get("raw_payload_json")
+        return out
 
     def list_affected_employees(self, group: str | None = None) -> list[dict]:
         roster = notify_wiring.load_roster(self.base["facility_id"])
