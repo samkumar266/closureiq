@@ -178,3 +178,58 @@ export type ClockSettings = { mode: 'system' | 'simulated'; speed: number; set_t
 export function setClock(settings: ClockSettings) {
   return apiPost<{ mode: string; now_sim: string; now_wall: string; speed: number }>('/clock', settings)
 }
+
+export type ChatEvent =
+  | { event: 'tool'; data: { name: string; args: Record<string, unknown> } }
+  | { event: 'token'; data: { text: string } }
+  | { event: 'replaced'; data: { text: string } }
+  | { event: 'done'; data: { evaluation_id: string; validated: boolean; whatif_id: string | null } }
+
+// POST /api/agent/chat answers with server-sent events. EventSource cannot POST, so read the stream by hand.
+export async function streamChat(
+  body: { facility_id: string; evaluation_id: string; message: string },
+  onEvent: (event: ChatEvent) => void,
+  signal?: AbortSignal,
+) {
+  let response: Response
+  try {
+    response = await fetch('/api/agent/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+      signal,
+    })
+  } catch {
+    throw new ApiError(0, 'network_error', 'API is unreachable')
+  }
+  if (!response.ok || !response.body) {
+    const errorBody: unknown = await response.json().catch(() => null)
+    const error = (errorBody as { error?: { code?: string; message?: string } } | null)?.error
+    throw new ApiError(response.status, error?.code ?? 'http_error', error?.message ?? 'Chat failed', {}, errorBody)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const frames = buffer.split(/\r?\n\r?\n/)
+    buffer = frames.pop() ?? ''
+    for (const frame of frames) {
+      let eventName = 'message'
+      const dataLines: string[] = []
+      for (const line of frame.split(/\r?\n/)) {
+        if (line.startsWith('event:')) eventName = line.slice(6).trim()
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+      }
+      if (dataLines.length === 0) continue
+      try {
+        onEvent({ event: eventName, data: JSON.parse(dataLines.join('\n')) } as ChatEvent)
+      } catch {
+        console.warn('Ignoring malformed chat event', frame)
+      }
+    }
+  }
+}

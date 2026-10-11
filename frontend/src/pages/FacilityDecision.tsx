@@ -4,6 +4,7 @@ import { ApiError, evaluateFacility, getFacilities, getFacilityStatus, getRoster
 import type { FacilityStatusResult } from '../api'
 import { ApprovalDrawer } from '../components/approval/ApprovalDrawer'
 import { AffectedEmployees } from '../components/decision/AffectedEmployees'
+import { AskPanel } from '../components/decision/AskPanel'
 import { DegradedBanner } from '../components/decision/DegradedBanner'
 import { EvidencePanel } from '../components/decision/EvidencePanel'
 import { PostureBanner } from '../components/decision/PostureBanner'
@@ -197,6 +198,7 @@ export function FacilityDecision() {
               <EvidencePanel recommendation={recommendation} timeZone={timeZone} />
               <ReasoningPanel recommendation={recommendation} />
             </div>
+            <AskPanel evaluationId={recommendation.evaluation_id} facilityId={id} offline={data.fromFixture} />
             <AffectedEmployees employees={data.employees} />
             <p className="text-sm">
               <Link className="font-medium text-blue-700 hover:underline" to={`/records/${recommendation.evaluation_id}`}>
