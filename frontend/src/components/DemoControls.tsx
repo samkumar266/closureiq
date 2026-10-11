@@ -39,7 +39,7 @@ export function DemoControls() {
       setMessage(`${label} failed: ${error instanceof Error ? error.message : 'unknown error'}`)
     } finally {
       setBusy(false)
-      // POST /clock currently answers 500 after applying the change, so re-read clock and mode either way.
+      // Re-read clock and mode either way, so the badges match the server.
       requestClockRefresh()
     }
   }

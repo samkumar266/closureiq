@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { acknowledgeDelivery, getEvaluation, getFacilities, getNotification, getRoster } from '../api'
+import { acknowledgeDelivery, getEvaluation, getFacilities, getNotification, getRoster, setClock } from '../api'
 import { StatusBadges } from '../components/StatusBadges'
 import { formatDateTime } from '../format'
 import { groupLabel } from '../groups'
 import { useEventSource } from '../hooks/useEventSource'
-import { useServerClock } from '../hooks/useServerClock'
+import { requestClockRefresh, useServerClock } from '../hooks/useServerClock'
 import { postureTheme } from '../theme'
 import type { Delivery, DeliveryStatus, Employee, Facility, NotificationPackage, Recommendation } from '../types'
 
@@ -127,6 +127,28 @@ export function DeliveryTracker() {
   const failedCount = deliveries.filter((delivery) => delivery.status === 'failed').length
   const firstUnacknowledgedDelivery = (recipientId: string) =>
     deliveries.find((delivery) => delivery.recipient_id === recipientId && delivery.status !== 'acknowledged')
+
+  // +30 min: move the simulated clock ahead (POST /api/clock fires due timers in the
+  // same request), then refresh so missed acknowledgments and escalations show.
+  const [jumping, setJumping] = useState(false)
+  const [jumpError, setJumpError] = useState<string | null>(null)
+  const jumpAhead = async () => {
+    setJumping(true)
+    setJumpError(null)
+    try {
+      await setClock({
+        mode: 'simulated',
+        speed: clockMode === 'simulated' ? speed : 1,
+        set_to: new Date(now + 30 * 60_000).toISOString(),
+      })
+    } catch (error) {
+      setJumpError(error instanceof Error ? error.message : 'Clock change failed')
+    } finally {
+      requestClockRefresh()
+      await reload()
+      setJumping(false)
+    }
+  }
 
   // Simulate responses: acknowledge most people, leaving a few so escalation has something to show.
   const simulateResponses = () => {
@@ -256,6 +278,16 @@ export function DeliveryTracker() {
                 >
                   Simulate responses
                 </button>
+                <button
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50"
+                  disabled={jumping}
+                  onClick={() => void jumpAhead()}
+                  title="Move the simulated clock ahead 30 minutes"
+                  type="button"
+                >
+                  {jumping ? 'Jumping…' : '+30 min'}
+                </button>
+                {jumpError && <span className="text-sm text-red-700">{jumpError}</span>}
               </div>
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full text-left text-sm">
