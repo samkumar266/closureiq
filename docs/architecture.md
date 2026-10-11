@@ -176,7 +176,8 @@ These are starting rules, not tuned numbers. The UI shows the category and the r
 What would change it
 For each numeric input, the engine reruns itself with the value moved just past the next threshold up and down, and reports the resulting posture. It also reports tier changes, such as a Watch upgraded to a Warning. This is deterministic, so the agent only explains it.
 Rationale text
-The paste-ready paragraph is a template filled from engine values, so it cannot contain a number the engine did not produce.
+<!-- DEPRECATED(closureiq): The paste-ready paragraph is a template filled from engine values, so it cannot contain a number the engine did not produce. -->
+The paste-ready paragraph is the engine's reasoning for the official decision record: a template filled from engine values, so it cannot contain a number the engine did not produce. Employee messages come from the policy templates, not from this paragraph.
 Thresholds and where they come from
 Status says what to do before the pitch. Verified means checked against a live source today. Confirm means read the cited document and copy the exact wording into thresholds.md. Assumption means a team choice, and we say so.
 | ID | Hazard | Input | Cutoff | Effect | Anchor | Status |
