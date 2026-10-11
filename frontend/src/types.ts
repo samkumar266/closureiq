@@ -249,9 +249,11 @@ export type DecisionRecord = {
     http_status: number | null
     ok: boolean
     raw_payload: unknown
+    error?: string | null
   }[]
   approval: Approval | null
-  notification: NotificationPackage | null
+  // Inside the record the backend names the id field `id` rather than `notification_id`.
+  notification: (Partial<NotificationPackage> & { id?: string; created_at_wall?: string }) | null
   deliveries: (Delivery & { status_history: { status: DeliveryStatus; at_wall: string; at_sim: string }[] })[]
   timers: Record<string, unknown>[]
   audit_log: Record<string, unknown>[]
