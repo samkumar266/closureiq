@@ -8,8 +8,8 @@ Hack Midwest 2026, Kansas City (Oct 10-11)
 |---|---|---|---|
 | Team lead | Sai Samanth Kumar Pendyala | sxp90460@ucmo.edu | [samkumar266](https://github.com/samkumar266) |
 | Member | Suraj Sirikonda | sxs98450@ucmo.edu | [surajreddy0011](https://github.com/surajreddy0011) |
-| Member | Nooka Badrinath (confirm spelling) | bxn23430@ucmo.edu | [Badrinathnooka](https://github.com/Badrinathnooka) |
-| Member | Kavya (full name) | kxk10070@ucmo.edu | (GitHub username, added later) |
+| Member | Nooka Badrinath  | bxn23430@ucmo.edu | [Badrinathnooka](https://github.com/Badrinathnooka) |
+| Member | Kavya | kxk10070@ucmo.edu | (GitHub username, added later) |
 
 ## What does our app do?
 
