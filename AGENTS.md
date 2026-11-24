@@ -29,10 +29,10 @@ The pitch is 3 minutes of the live app only. No slides. Judges score: usefulness
 ## Folder ownership (do not edit other folders without asking)
 
 - /frontend: Kavya
-- /api/ingest, /api/store, /api/app (routers and wiring): Badri
-- /api/engine and /ai (Strands agent): Samanth (team lead)
-- /api/notify, /docs, /mocks, deploy scripts and Akamai Cloud: Suraj
-- /api/clock.py: created by Badri, extended by Suraj
+- /api/ingest, /api/store, /api/app (routers and wiring): Badri , extended by Samanth
+- /api/engine and /ai (Strands agent): Samanth
+- /api/notify, /docs, /mocks, deploy scripts and Akamai Cloud: Suraj, extended by Kavya
+- /api/clock.py: created by Badri, extended by Kavya
 
 ## Hackathon rules (these apply to every AI assistant too)
 
