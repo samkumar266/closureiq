@@ -4,7 +4,7 @@ Hack Midwest 2026, Kansas City (Oct 10-11)
 
 ## Team
 
-| Role | Full name | School email | GitHub |
+| Role | Full name | GitHub |
 |---|---|---|---|
 | Team Lead | Kavya Kalidindi  | [KAVYADINDINDI](https://github.com/KAVYADINDI) |
 | Member | Sai Samanth Kumar Pendyala | [samkumar266](https://github.com/samkumar266) |
