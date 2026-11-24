@@ -6,10 +6,10 @@ Hack Midwest 2026, Kansas City (Oct 10-11)
 
 | Role | Full name | School email | GitHub |
 |---|---|---|---|
-| Team lead | Sai Samanth Kumar Pendyala | sxp90460@ucmo.edu | [samkumar266](https://github.com/samkumar266) |
+| Team Lead | Kavya Kalidindi | NA | [KAVYADINDINDI](https://github.com/KAVYADINDI) |
+| Member | Sai Samanth Kumar Pendyala | sxp90460@ucmo.edu | [samkumar266](https://github.com/samkumar266) |
 | Member | Suraj Sirikonda | sxs98450@ucmo.edu | [surajreddy0011](https://github.com/surajreddy0011) |
 | Member | Nooka Badrinath  | bxn23430@ucmo.edu | [Badrinathnooka](https://github.com/Badrinathnooka) |
-| Member | Kavya | kxk10070@ucmo.edu | (GitHub username, added later) |
 
 ## What does our app do?
 
@@ -21,7 +21,7 @@ See https://hackmidwest.com/#prizes for details.
 
 - [ ] Flex: Best FinTech App
 - [x] AWS: Best Use of Strands Agents SDK
-- [x] Akamai Cloud AI Challenge
+- [ ] Akamai Cloud AI Challenge
 - [ ] DevRev Challenge
 - [x] USDA AI Challenge
 
@@ -34,7 +34,11 @@ See https://hackmidwest.com/#prizes for details.
 
 ## Tools and AI assistance
 
-We use third-party frameworks and libraries only. Team members use different AI coding assistants (including Claude) to help write code during the event. All code in this repo was written during the competition.
+- primarily used claude code as coding assistant
+
+We use third-party frameworks and libraries only. 
+Team members use different AI coding assistants to help write code during the event. 
+All code in this repo was written during the competition.
 
 ## How to run it
 
