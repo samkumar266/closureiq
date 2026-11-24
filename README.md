@@ -6,10 +6,10 @@ Hack Midwest 2026, Kansas City (Oct 10-11)
 
 | Role | Full name | School email | GitHub |
 |---|---|---|---|
-| Team Lead | Kavya Kalidindi | NA | [KAVYADINDINDI](https://github.com/KAVYADINDI) |
-| Member | Sai Samanth Kumar Pendyala | sxp90460@ucmo.edu | [samkumar266](https://github.com/samkumar266) |
-| Member | Suraj Sirikonda | sxs98450@ucmo.edu | [surajreddy0011](https://github.com/surajreddy0011) |
-| Member | Nooka Badrinath  | bxn23430@ucmo.edu | [Badrinathnooka](https://github.com/Badrinathnooka) |
+| Team Lead | Kavya Kalidindi  | [KAVYADINDINDI](https://github.com/KAVYADINDI) |
+| Member | Sai Samanth Kumar Pendyala | [samkumar266](https://github.com/samkumar266) |
+| Member | Suraj Sirikonda  | [surajreddy0011](https://github.com/surajreddy0011) |
+| Member | Nooka Badrinath   | [Badrinathnooka](https://github.com/Badrinathnooka) |
 
 ## What does our app do?
 
